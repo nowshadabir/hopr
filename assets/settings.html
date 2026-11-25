@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hopr Settings</title>
+  <style>
+    :root {
+      --bg: #f7f5ef;
+      --border: rgba(0, 0, 0, 0.08);
+      --text: #181a18;
+      --muted: #6e726d;
+      --accent: #0d5c3e;
+      --toggle-off: #cbc7bd;
+      --btn-bg: #ffffff;
+      --btn-border: rgba(0, 0, 0, 0.14);
+      --btn-hover: #f1efe8;
+      --danger: #dc2626;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1e1c;
+        --border: rgba(255, 255, 255, 0.08);
+        --text: #f2f2ee;
+        --muted: #9ca09a;
+        --accent: #198754;
+        --toggle-off: #484b47;
+        --btn-bg: #272a27;
+        --btn-border: rgba(255, 255, 255, 0.14);
+        --btn-hover: #323632;
+        --danger: #f87171;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    }
+
+    .page {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 36px 40px 48px;
+    }
+
+    .header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      margin: 0;
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+
+    .done-btn {
+      height: 32px;
+      padding: 0 14px;
+      border-radius: 8px;
+      border: 1px solid var(--btn-border);
+      background: var(--btn-bg);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .done-btn:hover {
+      background: var(--btn-hover);
+    }
+
+    .list {
+      border-top: 1px solid var(--border);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 15px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .row-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .avatar {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #135d43;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+    }
+
+    .avatar-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.14s ease;
+    }
+
+    .avatar:hover .avatar-overlay {
+      opacity: 1;
+    }
+
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .row-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .row-sub {
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .row-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .toggle-label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      border-radius: 999px;
+      border: none;
+      background: var(--toggle-off);
+      cursor: pointer;
+      padding: 0;
+      transition: background 0.16s ease;
+    }
+
+    .switch.on {
+      background: var(--accent);
+    }
+
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+      transition: transform 0.16s ease;
+    }
+
+    .switch.on::after {
+      transform: translateX(20px);
+    }
+
+    .ghost-btn {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 6px;
+    }
+
+    .ghost-btn:hover {
+      background: var(--btn-hover);
+      color: var(--text);
+    }
+
+    .ghost-btn.danger:hover {
+      color: var(--danger);
+    }
+
+    .add-acct-btn {
+      margin-top: 18px;
+      height: 36px;
+      padding: 0 18px;
+      border-radius: 9px;
+      border: 1px solid var(--btn-border);
+      background: var(--btn-bg);
+      color: var(--text);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .add-acct-btn:hover {
+      background: var(--btn-hover);
+    }
+
+    h2 {
+      margin: 34px 0 10px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .pref-btn {
+      border: none;
+      background: transparent;
+      color: var(--accent);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .pref-btn:hover {
+      background: var(--btn-hover);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header-row">
+      <div>
+        <h1>Accounts</h1>
+        <p class="subtitle">Photo and name sync automatically from each linked WhatsApp account.</p>
+      </div>
+      <button id="done-btn" class="done-btn">Done</button>
+    </div>
+
+    <div id="accounts-list" class="list"></div>
+    <input id="avatar-picker" type="file" accept="image/*" style="display: none;" />
+    <button id="add-acct-btn" class="add-acct-btn">Add account</button>
+
+    <h2>Notifications</h2>
+    <div class="list">
+      <div class="row">
+        <div class="row-title" style="font-weight: 500; font-size: 14px;">Show message previews</div>
+        <button id="previews-btn" class="pref-btn">On</button>
+      </div>
+      <div class="row">
+        <div class="row-title" style="font-weight: 500; font-size: 14px;">Badge on Dock icon</div>
+        <button id="dock-badge-btn" class="pref-btn">Total unread</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const post = (payload) => {
+      try {
+        window.webkit.messageHandlers.ipc.postMessage(JSON.stringify(payload));
+      } catch (_) {}
+    };
+
+    const avatarFallbackSvg = () => `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="rgba(255,255,255,0.88)">
+        <circle cx="12" cy="8.5" r="4.2"/>
+        <path d="M4.5 20.5c0-3.9 3.35-6.5 7.5-6.5s7.5 2.6 7.5 6.5"/>
+      </svg>`;
+
+    const cameraOverlayHtml = `
+      <span class="avatar-overlay">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+      </span>`;
+
+    let pendingAvatarAccountId = null;
+    const avatarPicker = document.getElementById("avatar-picker");
+
+    const openAvatarPicker = (accountId) => {
+      pendingAvatarAccountId = accountId;
+      avatarPicker.value = "";
+      avatarPicker.click();
+    };
+
+    avatarPicker.addEventListener("change", () => {
+      const file = avatarPicker.files && avatarPicker.files[0];
+      const accountId = pendingAvatarAccountId;
+      pendingAvatarAccountId = null;
+      if (!file || !accountId) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const size = 128;
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          const minSide = Math.min(img.width, img.height);
+          const sx = (img.width - minSide) / 2;
+          const sy = (img.height - minSide) / 2;
+          ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+          post({ type: "set_custom_avatar", id: accountId, avatar_url: dataUrl });
+        };
+        img.src = String(reader.result || "");
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById("done-btn").addEventListener("click", () => {
+      post({ type: "close_settings" });
+    });
+
+    document.getElementById("add-acct-btn").addEventListener("click", () => {
+      post({ type: "add_account" });
+    });
+
+    document.getElementById("previews-btn").addEventListener("click", () => {
+      post({ type: "toggle_previews" });
+    });
+
+    document.getElementById("dock-badge-btn").addEventListener("click", () => {
+      post({ type: "toggle_dock_badge" });
+    });
+
+    window.__updateSettings = (state) => {
+      const list = document.getElementById("accounts-list");
+      list.innerHTML = "";
+      const accounts = state.accounts || [];
+
+      for (const acct of accounts) {
+        const row = document.createElement("div");
+        row.className = "row";
+
+        const left = document.createElement("div");
+        left.className = "row-left";
+
+        const avatar = document.createElement("button");
+        avatar.type = "button";
+        avatar.className = "avatar";
+        avatar.title = "Change photo (this device only)";
+        avatar.style.backgroundColor = acct.color || "#135D43";
+        if (acct.avatar_url) {
+          avatar.innerHTML = `<img src="${acct.avatar_url}" alt="" />` + cameraOverlayHtml;
+        } else {
+          avatar.innerHTML = avatarFallbackSvg() + cameraOverlayHtml;
+        }
+        avatar.addEventListener("click", () => openAvatarPicker(acct.id));
+
+        const info = document.createElement("div");
+        const title = document.createElement("div");
+        title.className = "row-title";
+        title.textContent = acct.name;
+
+        const sub = document.createElement("div");
+        sub.className = "row-sub";
+        const parts = [acct.label];
+        if (acct.phone) parts.push(acct.phone);
+        parts.push(acct.short_sleep_summary);
+        sub.textContent = parts.filter(Boolean).join(" · ");
+
+        info.appendChild(title);
+        info.appendChild(sub);
+        left.appendChild(avatar);
+        left.appendChild(info);
+
+        const right = document.createElement("div");
+        right.className = "row-right";
+
+        const photoBtn = document.createElement("button");
+        photoBtn.className = "ghost-btn";
+        photoBtn.textContent = "Change photo";
+        photoBtn.title = "Set custom photo for this device only";
+        photoBtn.addEventListener("click", () => openAvatarPicker(acct.id));
+        right.appendChild(photoBtn);
+
+        if (acct.has_custom_avatar) {
+          const resetBtn = document.createElement("button");
+          resetBtn.className = "ghost-btn";
+          resetBtn.textContent = "Reset photo";
+          resetBtn.addEventListener("click", () => {
+            post({ type: "set_custom_avatar", id: acct.id, avatar_url: null });
+          });
+          right.appendChild(resetBtn);
+        }
+
+        if (accounts.length > 1) {
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "ghost-btn danger";
+          removeBtn.textContent = "Remove";
+          removeBtn.addEventListener("click", () => {
+            post({ type: "remove_account", id: acct.id });
+          });
+          right.appendChild(removeBtn);
+        }
+
+        const label = document.createElement("span");
+        label.className = "toggle-label";
+        label.textContent = "Always connected";
+
+        const sw = document.createElement("button");
+        sw.className = "switch" + (acct.keep_connected ? " on" : "");
+        sw.setAttribute("aria-pressed", String(Boolean(acct.keep_connected)));
+        sw.addEventListener("click", () => {
+          post({
+            type: "set_keep_connected",
+            id: acct.id,
+            keep_connected: !acct.keep_connected,
+          });
+        });
+
+        right.appendChild(label);
+        right.appendChild(sw);
+
+        row.appendChild(left);
+        row.appendChild(right);
+        list.appendChild(row);
+      }
+
+      document.getElementById("previews-btn").textContent = state.show_message_previews
+        ? "On"
+        : "Off";
+      document.getElementById("dock-badge-btn").textContent = state.dock_badge_enabled
+        ? "Total unread"
+        : "Off";
+    };
+  </script>
+</body>
+</html>

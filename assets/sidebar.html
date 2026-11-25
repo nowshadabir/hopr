@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hopr Sidebar</title>
+  <style>
+    :root {
+      --rail-bg: #0b2419;
+      --rail-border: rgba(255, 255, 255, 0.08);
+      --gold-ring: #e8b931;
+      --badge-bg: #f4c430;
+      --badge-fg: #111814;
+      --icon-muted: rgba(255, 255, 255, 0.56);
+      --icon-hover: rgba(255, 255, 255, 0.92);
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--rail-bg);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      padding: 14px 0 16px;
+      border-right: 1px solid var(--rail-border);
+    }
+
+    .accounts {
+      flex: 1;
+      width: 100%;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 4px 0 12px;
+    }
+
+    .accounts::-webkit-scrollbar {
+      display: none;
+    }
+
+    .account-wrap {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .account-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      padding: 0;
+      background: #135d43;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      overflow: hidden;
+      transition: transform 0.14s ease, opacity 0.16s ease, box-shadow 0.14s ease;
+    }
+
+    .account-btn:hover {
+      transform: scale(1.06);
+    }
+
+    .account-wrap.active .account-btn {
+      box-shadow: 0 0 0 2px var(--rail-bg), 0 0 0 4px var(--gold-ring);
+    }
+
+    .account-wrap.hibernated .account-btn {
+      opacity: 0.38;
+      filter: grayscale(40%);
+    }
+
+    .account-btn img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+
+    .badge {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: var(--badge-bg);
+      color: var(--badge-fg);
+      font-size: 10px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+      pointer-events: none;
+    }
+
+    .add-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1.5px dashed rgba(255, 255, 255, 0.28);
+      background: transparent;
+      color: var(--icon-muted);
+      font-size: 20px;
+      font-weight: 300;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.14s ease, color 0.14s ease, background 0.14s ease;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .add-btn:hover {
+      border-color: rgba(255, 255, 255, 0.55);
+      color: var(--icon-hover);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .settings-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      border: none;
+      background: transparent;
+      color: var(--icon-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: color 0.14s ease, background 0.14s ease;
+      flex-shrink: 0;
+    }
+
+    .settings-btn:hover,
+    .settings-btn.active {
+      color: var(--icon-hover);
+      background: rgba(255, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <div id="accounts" class="accounts"></div>
+    <button id="settings-btn" class="settings-btn" title="Accounts &amp; Settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
+  </div>
+
+  <script>
+    const post = (payload) => {
+      try {
+        window.webkit.messageHandlers.ipc.postMessage(JSON.stringify(payload));
+      } catch (_) {}
+    };
+
+    const avatarFallbackSvg = () => `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="rgba(255,255,255,0.88)">
+        <circle cx="12" cy="8.5" r="4.2"/>
+        <path d="M4.5 20.5c0-3.9 3.35-6.5 7.5-6.5s7.5 2.6 7.5 6.5"/>
+      </svg>`;
+
+    document.getElementById("settings-btn").addEventListener("click", () => {
+      post({ type: "toggle_settings" });
+    });
+
+    window.__updateSidebar = (state) => {
+      const container = document.getElementById("accounts");
+      container.innerHTML = "";
+
+      const settingsBtn = document.getElementById("settings-btn");
+      settingsBtn.classList.toggle("active", Boolean(state.settings_open));
+
+      for (const acct of state.accounts || []) {
+        const wrap = document.createElement("div");
+        wrap.className = "account-wrap"
+          + (acct.is_active && !state.settings_open ? " active" : "")
+          + (acct.lifecycle === "hibernated" ? " hibernated" : "");
+
+        const btn = document.createElement("button");
+        btn.className = "account-btn";
+        btn.style.backgroundColor = acct.color || "#135D43";
+        btn.title = `${acct.name} (${acct.lifecycle})${acct.muted ? " · Muted" : ""}`;
+
+        if (acct.avatar_url) {
+          const img = document.createElement("img");
+          img.src = acct.avatar_url;
+          img.alt = acct.name;
+          btn.appendChild(img);
+        } else {
+          btn.innerHTML = avatarFallbackSvg();
+        }
+
+        btn.addEventListener("click", () => {
+          post({ type: "switch_account", id: acct.id });
+        });
+
+        btn.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          post({ type: "hibernate_account", id: acct.id });
+        });
+
+        wrap.appendChild(btn);
+
+        if (acct.unread > 0) {
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = acct.unread > 99 ? "99+" : String(acct.unread);
+          wrap.appendChild(badge);
+        }
+
+        container.appendChild(wrap);
+      }
+
+      const addBtn = document.createElement("button");
+      addBtn.className = "add-btn";
+      addBtn.title = "Add account";
+      addBtn.textContent = "+";
+      addBtn.addEventListener("click", () => {
+        post({ type: "add_account" });
+      });
+      container.appendChild(addBtn);
+    };
+  </script>
+</body>
+</html>
