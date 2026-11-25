@@ -8,6 +8,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      test_filter:
+        description: Optional exact Rust test name to run in isolation
+        required: false
+        type: string
 
 jobs:
   test-windows:
@@ -23,6 +28,12 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Run unit tests
-        run: cargo test -- --test-threads=1 --nocapture
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:HOPR_TEST_FILTER)) {
+            cargo test -- --test-threads=1 --nocapture
+          } else {
+            cargo test "$env:HOPR_TEST_FILTER" -- --exact --test-threads=1 --nocapture
+          }
         env:
           HOPR_DATA_DIR: ${{ runner.temp }}\hopr-test-data
+          HOPR_TEST_FILTER: ${{ inputs.test_filter }}
