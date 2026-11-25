@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.0
+
+- Custom branded HTML release notes in the Sparkle auto-updater UI.
+- Added full Windows support (isolated Edge WebView2 profiles, Windows Toast notifications, single-instance mutex, `.ico` app icon).
+- Added Windows CI builds producing both `Hopr-1.4.0-win-x64.exe` and `Hopr-1.4.0-Setup.exe` alongside `Hopr-1.4.0.dmg`.
+
 ## v1.3.0
 
 - Redesigned two-pane Settings UI with account cards, status pills, lifecycle controls, reminders, and light/dark themes.
