@@ -19,4 +19,4 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Run unit tests
-        run: cargo test -- --test-threads=1 --nocapture
+        run: cargo test --release -- --test-threads=1 --nocapture
