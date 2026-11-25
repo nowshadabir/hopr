@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hopr Lock</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0c1216;
+      --card: #151e24;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #eef3f5;
+      --muted: #8ea0a8;
+      --accent: #25d366;
+      --accent-hover: #2ce06f;
+      --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 50% 25%, #16262f 0%, var(--bg) 68%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .card {
+      width: min(360px, calc(100vw - 48px));
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px 24px 24px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.48);
+      text-align: center;
+    }
+    .badge {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 14px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(37, 211, 102, 0.14);
+      border: 1px solid rgba(37, 211, 102, 0.3);
+      color: var(--accent);
+    }
+    .badge svg {
+      width: 26px;
+      height: 26px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .title {
+      font-size: 18px;
+      font-weight: 650;
+      margin: 0 0 4px;
+      letter-spacing: -0.01em;
+    }
+    .sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 0 20px;
+    }
+    .pin-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .pin-input {
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(0, 0, 0, 0.28);
+      color: var(--text);
+      font-size: 16px;
+      letter-spacing: 0.18em;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .pin-input:focus {
+      border-color: var(--accent);
+    }
+    .btn {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: none;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease, opacity 0.15s ease;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #08150d;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+    .btn-secondary {
+      margin-top: 10px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .error {
+      min-height: 18px;
+      margin-top: 10px;
+      font-size: 12.5px;
+      color: var(--danger);
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge" id="lock-badge">
+      <svg viewBox="0 0 24 24">
+        <rect x="4" y="11" width="16" height="10" rx="2.5"></rect>
+        <path d="M8 11V7a4 4 0 0 1 8 0v4"></path>
+      </svg>
+    </div>
+    <h1 class="title" id="acct-name">Locked Account</h1>
+    <p class="sub" id="lock-sub">Unlock to view messages</p>
+
+    <form class="pin-form hidden" id="pin-form">
+      <input
+        id="pin-input"
+        class="pin-input"
+        type="password"
+        inputmode="numeric"
+        autocomplete="off"
+        placeholder="Enter PIN"
+        maxlength="32"
+      />
+      <button type="submit" class="btn btn-primary">Unlock with PIN</button>
+    </form>
+
+    <button type="button" id="touch-id-btn" class="btn btn-secondary hidden">
+      Unlock with Touch ID
+    </button>
+
+    <button type="button" id="settings-btn" class="btn btn-secondary hidden">
+      Open Settings
+    </button>
+
+    <div class="error" id="lock-error"></div>
+  </div>
+
+  <script>
+    let lockState = null;
+
+    function post(msg) {
+      if (window.ipc && window.ipc.postMessage) {
+        window.ipc.postMessage(JSON.stringify(msg));
+      }
+    }
+
+    const pinForm = document.getElementById("pin-form");
+    const pinInput = document.getElementById("pin-input");
+    const touchIdBtn = document.getElementById("touch-id-btn");
+    const settingsBtn = document.getElementById("settings-btn");
+    const acctName = document.getElementById("acct-name");
+    const lockSub = document.getElementById("lock-sub");
+    const lockError = document.getElementById("lock-error");
+    const lockBadge = document.getElementById("lock-badge");
+
+    pinForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!lockState) return;
+      const pin = pinInput.value.trim();
+      if (!pin) {
+        lockError.textContent = "Enter your PIN";
+        pinInput.focus();
+        return;
+      }
+      lockError.textContent = "";
+      post({ type: "unlock_with_pin", id: lockState.account_id, pin });
+      pinInput.value = "";
+    });
+
+    touchIdBtn.addEventListener("click", () => {
+      if (!lockState) return;
+      lockError.textContent = "";
+      post({ type: "unlock_with_touch_id", id: lockState.account_id });
+    });
+
+    settingsBtn.addEventListener("click", () => {
+      post({ type: "toggle_settings" });
+    });
+
+    window.__HOPR_LOCK_STATE__ = function (state) {
+      lockState = state;
+      acctName.textContent = state.account_name || "Locked Account";
+      lockError.textContent = state.error || "";
+      if (state.account_color) {
+        lockBadge.style.borderColor = state.account_color + "66";
+      }
+
+      const hasPin = !!state.has_pin;
+      const canBio = !!state.can_biometric;
+
+      pinForm.classList.toggle("hidden", !hasPin);
+      touchIdBtn.classList.toggle("hidden", !canBio);
+      settingsBtn.classList.toggle("hidden", hasPin || canBio);
+
+      if (hasPin) {
+        lockSub.textContent = canBio
+          ? "Enter your PIN or use Touch ID"
+          : "Enter your PIN to unlock";
+        setTimeout(() => pinInput.focus(), 30);
+      } else if (canBio) {
+        lockSub.textContent = "Use Touch ID to unlock";
+      } else {
+        lockSub.textContent = "Set a PIN in Settings to unlock";
+      }
+    };
+
+    post({ type: "lock_ready" });
+  </script>
+</body>
+</html>

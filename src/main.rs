@@ -19,12 +19,13 @@ use menu::{
 };
 use muda::MenuEvent;
 use platform::{
-    Notifications, authenticate_touch_id, hide_application, pick_image_data_url, preview_sound,
-    pump_runloop_for_flush, remove_data_store_for_account, set_dock_badge, set_launch_at_login,
-    unhide_and_activate_application,
+    Notifications, authenticate_touch_id, can_authenticate_biometric, hide_application,
+    pick_image_data_url, preview_sound, pump_runloop_for_flush, remove_data_store_for_account,
+    set_dock_badge, set_launch_at_login, unhide_and_activate_application,
 };
 use serde::{Deserialize, Serialize};
 use sparkle::SparkleUpdater;
+use std::collections::HashSet;
 use std::thread;
 use std::time::Duration;
 use tao::dpi::{LogicalPosition, LogicalSize};
@@ -83,6 +84,11 @@ enum UiIpcMsg {
     SetNotifSound { id: Uuid, sound: String },
     SetGroup { id: Uuid, group: Option<String> },
     ToggleAccountLock { id: Uuid },
+    LockReady,
+    UnlockWithPin { id: Uuid, pin: String },
+    UnlockWithTouchId { id: Uuid },
+    SetLockPin { current_pin: Option<String>, new_pin: String },
+    ClearLockPin { current_pin: Option<String> },
     AddReminder { account_id: Uuid, note: String, delay_secs: u64 },
     RemoveReminder { id: Uuid },
     PickCustomAvatar { id: Uuid },
@@ -115,6 +121,8 @@ struct UiStatePayload<'a> {
     periodic_wake_enabled: bool,
     quit_on_close: bool,
     launch_at_login: bool,
+    has_lock_pin: bool,
+    can_biometric: bool,
 }
 
 struct LayoutRects {
@@ -181,6 +189,8 @@ fn sync_ui(
         periodic_wake_enabled: cfg.periodic_wake_enabled,
         quit_on_close: cfg.quit_on_close,
         launch_at_login: cfg.launch_at_login,
+        has_lock_pin: cfg.has_lock_pin(),
+        can_biometric: can_authenticate_biometric(),
     };
 
     if let Ok(json) = serde_json::to_string(&payload) {
@@ -198,6 +208,108 @@ fn sync_ui(
         0
     };
     set_dock_badge(badge);
+}
+
+fn is_account_blocked(acct: &config::AccountConfig, session_unlocked: &HashSet<Uuid>) -> bool {
+    acct.locked && !session_unlocked.contains(&acct.id)
+}
+
+fn blocked_account_id(
+    cfg: &AppConfig,
+    manager: &WebViewManager,
+    locked_target: Option<Uuid>,
+    session_unlocked: &HashSet<Uuid>,
+) -> Option<Uuid> {
+    locked_target
+        .filter(|id| {
+            cfg.get(*id)
+                .is_some_and(|a| is_account_blocked(a, session_unlocked))
+        })
+        .or_else(|| {
+            manager.active_id().filter(|id| {
+                cfg.get(*id)
+                    .is_some_and(|a| is_account_blocked(a, session_unlocked))
+            })
+        })
+}
+
+fn push_lock_state(
+    lock_wv: Option<&WebView>,
+    cfg: &AppConfig,
+    locked_target: Option<Uuid>,
+    error: Option<&str>,
+) {
+    let Some(lwv) = lock_wv else { return };
+    let Some(id) = locked_target else { return };
+    let Some(acct) = cfg.get(id) else { return };
+    let payload = serde_json::json!({
+        "account_id": acct.id,
+        "account_name": acct.effective_name(),
+        "account_color": acct.color,
+        "has_pin": cfg.has_lock_pin(),
+        "can_biometric": can_authenticate_biometric(),
+        "error": error.unwrap_or(""),
+    });
+    let script = format!("window.__HOPR_LOCK_STATE__ && window.__HOPR_LOCK_STATE__({payload});");
+    let _ = lwv.evaluate_script(&script);
+}
+
+fn refresh_content_layer(
+    settings_open: bool,
+    window: &Window,
+    proxy: &EventLoopProxy<AppEvent>,
+    settings_wv: &mut Option<WebView>,
+    lock_wv: &mut Option<WebView>,
+    locked_target: &mut Option<Uuid>,
+    lock_error: &mut Option<String>,
+    cfg: &AppConfig,
+    manager: &WebViewManager,
+    session_unlocked: &HashSet<Uuid>,
+) {
+    if settings_open {
+        if let Some(lwv) = lock_wv.take() {
+            teardown_webview(lwv, "lock");
+        }
+        if settings_wv.is_none() {
+            let rects = layout_rects(window);
+            *settings_wv = Some(build_ui_webview(
+                include_str!("../assets/settings.html"),
+                rects.settings,
+                true,
+                window,
+                proxy,
+            ));
+        }
+        manager.set_active_visible(false);
+        return;
+    }
+
+    if let Some(swv) = settings_wv.take() {
+        teardown_webview(swv, "settings");
+    }
+
+    if let Some(blocked_id) = blocked_account_id(cfg, manager, *locked_target, session_unlocked) {
+        *locked_target = Some(blocked_id);
+        manager.set_active_visible(false);
+        if lock_wv.is_none() {
+            let rects = layout_rects(window);
+            *lock_wv = Some(build_ui_webview(
+                include_str!("../assets/lock.html"),
+                rects.content,
+                true,
+                window,
+                proxy,
+            ));
+        }
+        push_lock_state(lock_wv.as_ref(), cfg, *locked_target, lock_error.as_deref());
+    } else {
+        *locked_target = None;
+        *lock_error = None;
+        if let Some(lwv) = lock_wv.take() {
+            teardown_webview(lwv, "lock");
+        }
+        manager.set_active_visible(true);
+    }
 }
 
 fn set_settings_mode(
@@ -344,6 +456,10 @@ fn main() {
         &proxy,
     );
     let mut settings_wv: Option<WebView> = None;
+    let mut lock_wv: Option<WebView> = None;
+    let mut session_unlocked: HashSet<Uuid> = HashSet::new();
+    let mut locked_target: Option<Uuid> = None;
+    let mut lock_error: Option<String> = None;
 
     // Cold start: draw sidebar immediately, load only active account first (unless launched hidden),
     // then stagger remaining Always Connected accounts.
@@ -367,6 +483,26 @@ fn main() {
         )
     {
         eprintln!("[hopr] Failed to load initial account: error={err}");
+    } else if initial_id.is_none() && !start_hidden {
+        if let Some(first_locked) = cfg
+            .active_account
+            .or_else(|| cfg.accounts.first().map(|a| a.id))
+            && cfg.get(first_locked).is_some_and(|a| a.locked)
+        {
+            locked_target = Some(first_locked);
+            refresh_content_layer(
+                settings_open,
+                &window,
+                &proxy,
+                &mut settings_wv,
+                &mut lock_wv,
+                &mut locked_target,
+                &mut lock_error,
+                &cfg,
+                &manager,
+                &session_unlocked,
+            );
+        }
     }
     manager.queue_cold_start_staggered(&cfg.accounts, initial_id);
 
@@ -393,10 +529,14 @@ fn main() {
                     let id = ctx.account_id;
                     if let Some(acct) = cfg.get(id).cloned() {
                         if acct.locked {
-                            if authenticate_touch_id(&format!("Unlock {}", acct.effective_name())) {
+                            if session_unlocked.contains(&id)
+                                || authenticate_touch_id(&format!("Unlock {}", acct.effective_name()))
+                            {
                                 cfg.set_locked(id, false);
+                                session_unlocked.remove(&id);
+                                locked_target = None;
+                                lock_error = None;
                                 settings_open = false;
-                                set_settings_mode(false, &window, &proxy, &mut settings_wv, &manager);
                                 let rects = layout_rects(&window);
                                 let _ = manager.switch_to(
                                     id,
@@ -407,11 +547,57 @@ fn main() {
                                     cfg.max_live_webviews,
                                     true,
                                 );
+                                refresh_content_layer(
+                                    settings_open,
+                                    &window,
+                                    &proxy,
+                                    &mut settings_wv,
+                                    &mut lock_wv,
+                                    &mut locked_target,
+                                    &mut lock_error,
+                                    &cfg,
+                                    &manager,
+                                    &session_unlocked,
+                                );
+                            } else {
+                                // Show lock screen so user can unlock with PIN first
+                                cfg.active_account = Some(id);
+                                let _ = cfg.save();
+                                settings_open = false;
+                                locked_target = Some(id);
+                                lock_error = Some("Unlock account first to disable lock".to_string());
+                                refresh_content_layer(
+                                    settings_open,
+                                    &window,
+                                    &proxy,
+                                    &mut settings_wv,
+                                    &mut lock_wv,
+                                    &mut locked_target,
+                                    &mut lock_error,
+                                    &cfg,
+                                    &manager,
+                                    &session_unlocked,
+                                );
                             }
-                        } else if authenticate_touch_id(&format!("Lock {}", acct.effective_name())) {
+                        } else if cfg.has_lock_pin() || can_authenticate_biometric() {
                             cfg.set_locked(id, true);
-                            if manager.active_id() == Some(id) {
+                            session_unlocked.remove(&id);
+                            if manager.active_id() == Some(id) || cfg.active_account == Some(id) {
+                                locked_target = Some(id);
+                                lock_error = None;
                                 manager.set_active_visible(false);
+                                refresh_content_layer(
+                                    settings_open,
+                                    &window,
+                                    &proxy,
+                                    &mut settings_wv,
+                                    &mut lock_wv,
+                                    &mut locked_target,
+                                    &mut lock_error,
+                                    &cfg,
+                                    &manager,
+                                    &session_unlocked,
+                                );
                             }
                         }
                         sync_ui(
@@ -523,7 +709,18 @@ fn main() {
                 }
             } else if menu_evt.id == menu_ids.open_settings {
                 settings_open = !settings_open;
-                set_settings_mode(settings_open, &window, &proxy, &mut settings_wv, &manager);
+                refresh_content_layer(
+                    settings_open,
+                    &window,
+                    &proxy,
+                    &mut settings_wv,
+                    &mut lock_wv,
+                    &mut locked_target,
+                    &mut lock_error,
+                    &cfg,
+                    &manager,
+                    &session_unlocked,
+                );
                 sync_ui(
                     &sidebar,
                     settings_wv.as_ref(),
@@ -538,13 +735,26 @@ fn main() {
                 window.set_visible(true);
                 window.set_focus();
                 let rects = layout_rects(&window);
+                let blocked = blocked_account_id(&cfg, &manager, locked_target, &session_unlocked).is_some();
                 manager.on_window_restored(
                     &cfg.accounts,
                     &window,
                     &proxy,
                     rects.content,
                     cfg.max_live_webviews,
-                    !settings_open,
+                    !settings_open && !blocked,
+                );
+                refresh_content_layer(
+                    settings_open,
+                    &window,
+                    &proxy,
+                    &mut settings_wv,
+                    &mut lock_wv,
+                    &mut locked_target,
+                    &mut lock_error,
+                    &cfg,
+                    &manager,
+                    &session_unlocked,
                 );
                 sync_ui(
                     &sidebar,
@@ -562,24 +772,47 @@ fn main() {
                 .switch_accounts
                 .iter()
                 .position(|id| *id == menu_evt.id)
-                && let Some(acct) = cfg.accounts.get(idx)
+                && let Some(acct) = cfg.accounts.get(idx).cloned()
             {
                 let id = acct.id;
                 window.set_visible(true);
                 window.set_focus();
+                if let Some(prev_id) = manager.active_id()
+                    && prev_id != id
+                {
+                    session_unlocked.remove(&prev_id);
+                }
                 cfg.active_account = Some(id);
                 let _ = cfg.save();
                 settings_open = false;
-                set_settings_mode(false, &window, &proxy, &mut settings_wv, &manager);
-                let rects = layout_rects(&window);
-                let _ = manager.switch_to(
-                    id,
-                    &cfg.accounts,
+                lock_error = None;
+                if is_account_blocked(&acct, &session_unlocked) {
+                    locked_target = Some(id);
+                    manager.set_active_visible(false);
+                } else {
+                    locked_target = None;
+                    let rects = layout_rects(&window);
+                    let _ = manager.switch_to(
+                        id,
+                        &cfg.accounts,
+                        &window,
+                        &proxy,
+                        rects.content,
+                        cfg.max_live_webviews,
+                        true,
+                    );
+                }
+                refresh_content_layer(
+                    settings_open,
                     &window,
                     &proxy,
-                    rects.content,
-                    cfg.max_live_webviews,
-                    true,
+                    &mut settings_wv,
+                    &mut lock_wv,
+                    &mut locked_target,
+                    &mut lock_error,
+                    &cfg,
+                    &manager,
+                    &session_unlocked,
                 );
                 sync_ui(
                     &sidebar,
@@ -605,13 +838,26 @@ fn main() {
                     window.set_visible(true);
                     window.set_focus();
                     let rects = layout_rects(&window);
+                    let blocked = blocked_account_id(&cfg, &manager, locked_target, &session_unlocked).is_some();
                     manager.on_window_restored(
                         &cfg.accounts,
                         &window,
                         &proxy,
                         rects.content,
                         cfg.max_live_webviews,
-                        !settings_open,
+                        !settings_open && !blocked,
+                    );
+                    refresh_content_layer(
+                        settings_open,
+                        &window,
+                        &proxy,
+                        &mut settings_wv,
+                        &mut lock_wv,
+                        &mut locked_target,
+                        &mut lock_error,
+                        &cfg,
+                        &manager,
+                        &session_unlocked,
                     );
                     sync_ui(
                         &sidebar,
@@ -633,6 +879,9 @@ fn main() {
                 if let Some(swv) = &settings_wv {
                     let _ = swv.set_bounds(rects.settings);
                 }
+                if let Some(lwv) = &lock_wv {
+                    let _ = lwv.set_bounds(rects.content);
+                }
                 manager.resize_all(rects.content);
             }
             Event::WindowEvent {
@@ -641,13 +890,26 @@ fn main() {
             } => {
                 if focused && !window.is_minimized() {
                     let rects = layout_rects(&window);
+                    let blocked = blocked_account_id(&cfg, &manager, locked_target, &session_unlocked).is_some();
                     manager.on_window_restored(
                         &cfg.accounts,
                         &window,
                         &proxy,
                         rects.content,
                         cfg.max_live_webviews,
-                        !settings_open,
+                        !settings_open && !blocked,
+                    );
+                    refresh_content_layer(
+                        settings_open,
+                        &window,
+                        &proxy,
+                        &mut settings_wv,
+                        &mut lock_wv,
+                        &mut locked_target,
+                        &mut lock_error,
+                        &cfg,
+                        &manager,
+                        &session_unlocked,
                     );
                     sync_ui(
                         &sidebar,
@@ -659,7 +921,25 @@ fn main() {
                         settings_open,
                     );
                 } else if !focused && window.is_minimized() {
+                    session_unlocked.clear();
+                    if let Some(id) = manager.active_id().or(cfg.active_account)
+                        && cfg.get(id).is_some_and(|a| a.locked)
+                    {
+                        locked_target = Some(id);
+                    }
                     manager.on_window_hidden_or_minimized();
+                    refresh_content_layer(
+                        settings_open,
+                        &window,
+                        &proxy,
+                        &mut settings_wv,
+                        &mut lock_wv,
+                        &mut locked_target,
+                        &mut lock_error,
+                        &cfg,
+                        &manager,
+                        &session_unlocked,
+                    );
                     sync_ui(
                         &sidebar,
                         settings_wv.as_ref(),
@@ -682,7 +962,25 @@ fn main() {
                     if window.fullscreen().is_some() {
                         window.set_fullscreen(None);
                     }
+                    session_unlocked.clear();
+                    if let Some(id) = manager.active_id().or(cfg.active_account)
+                        && cfg.get(id).is_some_and(|a| a.locked)
+                    {
+                        locked_target = Some(id);
+                    }
                     manager.on_window_hidden_or_minimized();
+                    refresh_content_layer(
+                        settings_open,
+                        &window,
+                        &proxy,
+                        &mut settings_wv,
+                        &mut lock_wv,
+                        &mut locked_target,
+                        &mut lock_error,
+                        &cfg,
+                        &manager,
+                        &session_unlocked,
+                    );
                     window.set_visible(false);
                     hide_application();
                     sync_ui(
@@ -702,13 +1000,26 @@ fn main() {
                     window.set_visible(true);
                     window.set_focus();
                     let rects = layout_rects(&window);
+                    let blocked = blocked_account_id(&cfg, &manager, locked_target, &session_unlocked).is_some();
                     manager.on_window_restored(
                         &cfg.accounts,
                         &window,
                         &proxy,
                         rects.content,
                         cfg.max_live_webviews,
-                        !settings_open,
+                        !settings_open && !blocked,
+                    );
+                    refresh_content_layer(
+                        settings_open,
+                        &window,
+                        &proxy,
+                        &mut settings_wv,
+                        &mut lock_wv,
+                        &mut locked_target,
+                        &mut lock_error,
+                        &cfg,
+                        &manager,
+                        &session_unlocked,
                     );
                 }
                 #[cfg(debug_assertions)]
@@ -848,36 +1159,45 @@ fn main() {
                     if let Ok(msg) = serde_json::from_str::<UiIpcMsg>(&body) {
                         match msg {
                             UiIpcMsg::SwitchAccount { id } => {
-                                if let Some(acct) = cfg.get(id).cloned()
-                                    && acct.locked
+                                if let Some(prev_id) = manager.active_id()
+                                    && prev_id != id
                                 {
-                                    if !authenticate_touch_id(&format!(
-                                        "Unlock {}",
-                                        acct.effective_name()
-                                    )) {
-                                        return;
-                                    }
-                                    cfg.set_locked(id, false);
+                                    session_unlocked.remove(&prev_id);
                                 }
                                 cfg.active_account = Some(id);
                                 let _ = cfg.save();
                                 settings_open = false;
-                                set_settings_mode(
-                                    false,
+                                lock_error = None;
+                                if cfg
+                                    .get(id)
+                                    .is_some_and(|acct| is_account_blocked(acct, &session_unlocked))
+                                {
+                                    locked_target = Some(id);
+                                    manager.set_active_visible(false);
+                                } else {
+                                    locked_target = None;
+                                    let rects = layout_rects(&window);
+                                    let _ = manager.switch_to(
+                                        id,
+                                        &cfg.accounts,
+                                        &window,
+                                        &proxy,
+                                        rects.content,
+                                        cfg.max_live_webviews,
+                                        true,
+                                    );
+                                }
+                                refresh_content_layer(
+                                    settings_open,
                                     &window,
                                     &proxy,
                                     &mut settings_wv,
+                                    &mut lock_wv,
+                                    &mut locked_target,
+                                    &mut lock_error,
+                                    &cfg,
                                     &manager,
-                                );
-                                let rects = layout_rects(&window);
-                                let _ = manager.switch_to(
-                                    id,
-                                    &cfg.accounts,
-                                    &window,
-                                    &proxy,
-                                    rects.content,
-                                    cfg.max_live_webviews,
-                                    true,
+                                    &session_unlocked,
                                 );
                                 sync_ui(
                                     &sidebar,
@@ -1048,27 +1368,241 @@ fn main() {
                             UiIpcMsg::ToggleAccountLock { id } => {
                                 if let Some(acct) = cfg.get(id).cloned() {
                                     let target_lock = !acct.locked;
-                                    let reason = if target_lock {
-                                        format!("Lock {}", acct.effective_name())
-                                    } else {
-                                        format!("Unlock {}", acct.effective_name())
-                                    };
-                                    if authenticate_touch_id(&reason) {
-                                        cfg.set_locked(id, target_lock);
-                                        if target_lock && manager.active_id() == Some(id) {
-                                            manager.set_active_visible(false);
+                                    if target_lock {
+                                        if !cfg.has_lock_pin() && !can_authenticate_biometric() {
+                                            if let Some(swv) = settings_wv.as_ref() {
+                                                let _ = swv.evaluate_script(
+                                                    "window.__onPinResult && window.__onPinResult(false, 'Set a PIN first before locking an account.');",
+                                                );
+                                            }
+                                        } else {
+                                            cfg.set_locked(id, true);
+                                            session_unlocked.remove(&id);
+                                            if manager.active_id() == Some(id)
+                                                || cfg.active_account == Some(id)
+                                            {
+                                                locked_target = Some(id);
+                                                lock_error = None;
+                                                manager.set_active_visible(false);
+                                            }
                                         }
-                                        sync_ui(
-                                            &sidebar,
-                                            settings_wv.as_ref(),
-                                            &menu_ids,
-                                            tray_icon.as_ref(),
-                                            &cfg,
-                                            &manager,
-                                            settings_open,
-                                        );
+                                    } else {
+                                        let allowed = session_unlocked.contains(&id)
+                                            || authenticate_touch_id(&format!(
+                                                "Disable lock for {}",
+                                                acct.effective_name()
+                                            ));
+                                        if allowed {
+                                            cfg.set_locked(id, false);
+                                            session_unlocked.remove(&id);
+                                            if locked_target == Some(id) {
+                                                locked_target = None;
+                                                lock_error = None;
+                                            }
+                                        } else {
+                                            cfg.active_account = Some(id);
+                                            let _ = cfg.save();
+                                            settings_open = false;
+                                            locked_target = Some(id);
+                                            lock_error = Some(
+                                                "Unlock account first to disable lock".to_string(),
+                                            );
+                                            refresh_content_layer(
+                                                settings_open,
+                                                &window,
+                                                &proxy,
+                                                &mut settings_wv,
+                                                &mut lock_wv,
+                                                &mut locked_target,
+                                                &mut lock_error,
+                                                &cfg,
+                                                &manager,
+                                                &session_unlocked,
+                                            );
+                                        }
                                     }
+                                    sync_ui(
+                                        &sidebar,
+                                        settings_wv.as_ref(),
+                                        &menu_ids,
+                                        tray_icon.as_ref(),
+                                        &cfg,
+                                        &manager,
+                                        settings_open,
+                                    );
                                 }
+                            }
+                            UiIpcMsg::LockReady => {
+                                push_lock_state(
+                                    lock_wv.as_ref(),
+                                    &cfg,
+                                    locked_target,
+                                    lock_error.as_deref(),
+                                );
+                            }
+                            UiIpcMsg::UnlockWithPin { id, pin } => {
+                                if cfg.verify_lock_pin(&pin) {
+                                    session_unlocked.insert(id);
+                                    locked_target = None;
+                                    lock_error = None;
+                                    cfg.active_account = Some(id);
+                                    let _ = cfg.save();
+                                    let rects = layout_rects(&window);
+                                    let _ = manager.switch_to(
+                                        id,
+                                        &cfg.accounts,
+                                        &window,
+                                        &proxy,
+                                        rects.content,
+                                        cfg.max_live_webviews,
+                                        true,
+                                    );
+                                    refresh_content_layer(
+                                        settings_open,
+                                        &window,
+                                        &proxy,
+                                        &mut settings_wv,
+                                        &mut lock_wv,
+                                        &mut locked_target,
+                                        &mut lock_error,
+                                        &cfg,
+                                        &manager,
+                                        &session_unlocked,
+                                    );
+                                    sync_ui(
+                                        &sidebar,
+                                        settings_wv.as_ref(),
+                                        &menu_ids,
+                                        tray_icon.as_ref(),
+                                        &cfg,
+                                        &manager,
+                                        settings_open,
+                                    );
+                                } else {
+                                    lock_error = Some("Incorrect PIN".to_string());
+                                    push_lock_state(
+                                        lock_wv.as_ref(),
+                                        &cfg,
+                                        locked_target,
+                                        lock_error.as_deref(),
+                                    );
+                                }
+                            }
+                            UiIpcMsg::UnlockWithTouchId { id } => {
+                                let name = cfg
+                                    .get(id)
+                                    .map(|a| a.effective_name().to_string())
+                                    .unwrap_or_else(|| "Account".to_string());
+                                if authenticate_touch_id(&format!("Unlock {name}")) {
+                                    session_unlocked.insert(id);
+                                    locked_target = None;
+                                    lock_error = None;
+                                    cfg.active_account = Some(id);
+                                    let _ = cfg.save();
+                                    let rects = layout_rects(&window);
+                                    let _ = manager.switch_to(
+                                        id,
+                                        &cfg.accounts,
+                                        &window,
+                                        &proxy,
+                                        rects.content,
+                                        cfg.max_live_webviews,
+                                        true,
+                                    );
+                                    refresh_content_layer(
+                                        settings_open,
+                                        &window,
+                                        &proxy,
+                                        &mut settings_wv,
+                                        &mut lock_wv,
+                                        &mut locked_target,
+                                        &mut lock_error,
+                                        &cfg,
+                                        &manager,
+                                        &session_unlocked,
+                                    );
+                                    sync_ui(
+                                        &sidebar,
+                                        settings_wv.as_ref(),
+                                        &menu_ids,
+                                        tray_icon.as_ref(),
+                                        &cfg,
+                                        &manager,
+                                        settings_open,
+                                    );
+                                } else {
+                                    lock_error = Some("Touch ID authentication failed".to_string());
+                                    push_lock_state(
+                                        lock_wv.as_ref(),
+                                        &cfg,
+                                        locked_target,
+                                        lock_error.as_deref(),
+                                    );
+                                }
+                            }
+                            UiIpcMsg::SetLockPin {
+                                current_pin,
+                                new_pin,
+                            } => {
+                                let verified = !cfg.has_lock_pin()
+                                    || current_pin
+                                        .as_deref()
+                                        .is_some_and(|p| cfg.verify_lock_pin(p));
+                                let (ok, msg) = if !verified {
+                                    (false, "Current PIN is incorrect.".to_string())
+                                } else {
+                                    match cfg.set_lock_pin(&new_pin) {
+                                        Ok(()) => (true, "Lock PIN saved.".to_string()),
+                                        Err(e) => (false, e),
+                                    }
+                                };
+                                if let Some(swv) = settings_wv.as_ref()
+                                    && let Ok(msg_json) = serde_json::to_string(&msg)
+                                {
+                                    let script = format!(
+                                        "window.__onPinResult && window.__onPinResult({ok}, {msg_json});"
+                                    );
+                                    let _ = swv.evaluate_script(&script);
+                                }
+                                sync_ui(
+                                    &sidebar,
+                                    settings_wv.as_ref(),
+                                    &menu_ids,
+                                    tray_icon.as_ref(),
+                                    &cfg,
+                                    &manager,
+                                    settings_open,
+                                );
+                            }
+                            UiIpcMsg::ClearLockPin { current_pin } => {
+                                let verified = !cfg.has_lock_pin()
+                                    || current_pin
+                                        .as_deref()
+                                        .is_some_and(|p| cfg.verify_lock_pin(p))
+                                    || authenticate_touch_id("Remove Hopr lock PIN");
+                                let (ok, msg) = if verified {
+                                    cfg.clear_lock_pin();
+                                    (true, "Lock PIN removed.".to_string())
+                                } else {
+                                    (false, "Current PIN is incorrect.".to_string())
+                                };
+                                if let Some(swv) = settings_wv.as_ref()
+                                    && let Ok(msg_json) = serde_json::to_string(&msg)
+                                {
+                                    let script = format!(
+                                        "window.__onPinResult && window.__onPinResult({ok}, {msg_json});"
+                                    );
+                                    let _ = swv.evaluate_script(&script);
+                                }
+                                sync_ui(
+                                    &sidebar,
+                                    settings_wv.as_ref(),
+                                    &menu_ids,
+                                    tray_icon.as_ref(),
+                                    &cfg,
+                                    &manager,
+                                    settings_open,
+                                );
                             }
                             UiIpcMsg::AddReminder {
                                 account_id,
@@ -1126,12 +1660,17 @@ fn main() {
                             }
                             UiIpcMsg::ToggleSettings => {
                                 settings_open = !settings_open;
-                                set_settings_mode(
+                                refresh_content_layer(
                                     settings_open,
                                     &window,
                                     &proxy,
                                     &mut settings_wv,
+                                    &mut lock_wv,
+                                    &mut locked_target,
+                                    &mut lock_error,
+                                    &cfg,
                                     &manager,
+                                    &session_unlocked,
                                 );
                                 sync_ui(
                                     &sidebar,
@@ -1145,12 +1684,17 @@ fn main() {
                             }
                             UiIpcMsg::CloseSettings => {
                                 settings_open = false;
-                                set_settings_mode(
-                                    false,
+                                refresh_content_layer(
+                                    settings_open,
                                     &window,
                                     &proxy,
                                     &mut settings_wv,
+                                    &mut lock_wv,
+                                    &mut locked_target,
+                                    &mut lock_error,
+                                    &cfg,
                                     &manager,
+                                    &session_unlocked,
                                 );
                                 sync_ui(
                                     &sidebar,

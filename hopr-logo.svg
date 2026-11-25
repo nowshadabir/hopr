@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    
+    <filter id="iconShadow" x="-15%" y="-10%" width="130%" height="135%">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity="0.28" />
+    </filter>
+
+    
+    <filter id="bubbleShadow" x="-20%" y="-20%" width="145%" height="145%">
+      <feDropShadow dx="8" dy="16" stdDeviation="18" flood-color="#051710" flood-opacity="0.52" />
+    </filter>
+
+    
+    <filter id="glyphShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0B4722" flood-opacity="0.38" />
+    </filter>
+
+    
+    <linearGradient id="silverBezel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F7F9FB" />
+      <stop offset="28%" stop-color="#C8CFD6" />
+      <stop offset="55%" stop-color="#EEF2F5" />
+      <stop offset="82%" stop-color="#9CA5AE" />
+      <stop offset="100%" stop-color="#DCE1E6" />
+    </linearGradient>
+
+    
+    <linearGradient id="darkBg" x1="15%" y1="0%" x2="85%" y2="100%">
+      <stop offset="0%" stop-color="#225B4A" />
+      <stop offset="50%" stop-color="#143D31" />
+      <stop offset="100%" stop-color="#0A231B" />
+    </linearGradient>
+
+    
+    <linearGradient id="innerRim" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.35" />
+    </linearGradient>
+
+    
+    <linearGradient id="glassBubble" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5DB892" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#154A38" stop-opacity="0.62" />
+    </linearGradient>
+
+    
+    <radialGradient id="greenBubble" cx="35%" cy="28%" r="72%">
+      <stop offset="0%" stop-color="#61F58E" />
+      <stop offset="48%" stop-color="#27D466" />
+      <stop offset="100%" stop-color="#159A47" />
+    </radialGradient>
+
+    
+    <linearGradient id="silverRing" x1="10%" y1="5%" x2="90%" y2="95%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="35%" stop-color="#D0D7DD" />
+      <stop offset="68%" stop-color="#F2F5F8" />
+      <stop offset="100%" stop-color="#AEB6BF" />
+    </linearGradient>
+
+    
+    <linearGradient id="glyphFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="60%" stop-color="#E7ECF0" />
+      <stop offset="100%" stop-color="#C8D0D8" />
+    </linearGradient>
+  </defs>
+
+  
+  <g filter="url(#iconShadow)">
+    
+    <rect x="96" y="96" width="832" height="832" rx="194" fill="url(#silverBezel)" />
+    
+    <rect x="118" y="118" width="788" height="788" rx="174" fill="url(#darkBg)" stroke="url(#innerRim)" stroke-width="4" />
+  </g>
+
+  
+  <path d="M 735 642.5 A 185 185 0 1 0 653 717.6 L 744 740 Q 752 742 750 734 Z" fill="url(#glassBubble)" stroke="#A7E8CC" stroke-opacity="0.38" stroke-width="4" stroke-linejoin="round" />
+
+  
+  <g filter="url(#bubbleShadow)">
+    <path d="M 287.1 578.9 A 215 215 0 1 1 358.7 664.1 L 270 696 Z" fill="url(#greenBubble)" stroke="url(#silverRing)" stroke-width="26" stroke-linejoin="round" />
+  </g>
+
+  
+  <path d="M 332 390 A 182 182 0 0 1 560 326" fill="none" stroke="#FFFFFF" stroke-opacity="0.24" stroke-width="10" stroke-linecap="round" />
+
+  
+  <g filter="url(#glyphShadow)">
+    
+    <path transform="translate(-10, 12)" d="M 388 398
+         C 400 388, 418 394, 426 408
+         L 444 442
+         C 450 454, 447 468, 437 476
+         L 424 486
+         C 436 510, 456 530, 480 542
+         L 490 529
+         C 498 519, 512 516, 524 522
+         L 558 540
+         C 572 548, 578 566, 568 578
+         L 552 596
+         C 534 614, 504 618, 474 606
+         C 420 584, 382 546, 360 492
+         C 348 462, 352 432, 370 414
+         Z" fill="url(#glyphFill)" />
+
+    
+    <circle cx="522" cy="408" r="28" fill="url(#glyphFill)" />
+    <path d="M 474 484 C 474 456, 496 442, 522 442 C 548 442, 570 456, 570 484 C 570 492, 564 498, 556 498 L 488 498 C 480 498, 474 492, 474 484 Z" fill="url(#glyphFill)" />
+
+    
+    <path d="M 556 385 A 24 24 0 1 1 556 431" fill="none" stroke="url(#glyphFill)" stroke-width="10" stroke-linecap="round" />
+    <path d="M 566 444 C 588 446, 604 460, 604 480 C 604 486, 599 491, 593 491 L 578 491" fill="none" stroke="url(#glyphFill)" stroke-width="10" stroke-linecap="round" />
+  </g>
+</svg>

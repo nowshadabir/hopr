@@ -788,9 +788,25 @@
 
         <div id="sec-privacy" class="section-head">
           <h2>Privacy &amp; security</h2>
-          <p class="section-sub">Each account runs in its own isolated WKWebsiteDataStore on this Mac.</p>
+          <p class="section-sub">Each account runs in its own isolated data store. Set a PIN to lock accounts across macOS and Windows.</p>
         </div>
         <div class="card-list">
+          <div class="list-row" style="flex-direction: column; align-items: stretch; gap: 10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+              <div>
+                <div class="row-meta-title">Account lock PIN</div>
+                <div class="row-meta-sub" id="pin-state-sub">No PIN set. Set a 4+ character PIN to lock accounts.</div>
+              </div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+              <input id="current-pin-input" class="field-control" type="password" inputmode="numeric" placeholder="Current PIN" style="width: 130px; display:none;" />
+              <input id="new-pin-input" class="field-control" type="password" inputmode="numeric" placeholder="New PIN (4+ chars)" style="width: 155px;" />
+              <input id="confirm-pin-input" class="field-control" type="password" inputmode="numeric" placeholder="Confirm PIN" style="width: 140px;" />
+              <button id="save-pin-btn" class="btn-outline" type="button">Save PIN</button>
+              <button id="clear-pin-btn" class="btn-outline danger" type="button" style="display:none;">Remove PIN</button>
+            </div>
+            <div id="pin-status-msg" class="row-meta-sub" style="min-height: 16px;"></div>
+          </div>
           <div class="list-row">
             <div>
               <div class="row-meta-title">Local storage &amp; permissions</div>
@@ -1062,7 +1078,7 @@
         lockSw.className = "switch" + (acct.locked ? " on" : "");
         lockSw.addEventListener("click", () => post({ type: "toggle_account_lock", id: acct.id }));
         lockItem.appendChild(lockSw);
-        lockItem.insertAdjacentHTML("beforeend", `<div><div class="toggle-title">Touch ID lock</div><div class="toggle-sub">Require unlock to open</div></div>`);
+        lockItem.insertAdjacentHTML("beforeend", `<div><div class="toggle-title">Account lock</div><div class="toggle-sub">Require PIN or Touch ID to open</div></div>`);
 
         toggles.appendChild(pinItem);
         toggles.appendChild(lockItem);
@@ -1116,7 +1132,58 @@
         row.appendChild(cancelBtn);
         remList.appendChild(row);
       }
+
+      const curPinInput = document.getElementById("current-pin-input");
+      const clearPinBtn = document.getElementById("clear-pin-btn");
+      const pinStateSub = document.getElementById("pin-state-sub");
+      if (state.has_lock_pin) {
+        curPinInput.style.display = "inline-block";
+        clearPinBtn.style.display = "inline-block";
+        pinStateSub.textContent = "PIN is active. Locked accounts can be unlocked with your PIN" + (state.can_biometric ? " or Touch ID." : ".");
+      } else {
+        curPinInput.style.display = "none";
+        clearPinBtn.style.display = "none";
+        pinStateSub.textContent = "No PIN set. Set a 4+ character PIN to lock accounts" + (state.can_biometric ? " (or use Touch ID)." : ".");
+      }
     };
+
+    const pinStatusMsg = document.getElementById("pin-status-msg");
+    window.__onPinResult = function (ok, msg) {
+      pinStatusMsg.textContent = msg || "";
+      pinStatusMsg.style.color = ok ? "#25d366" : "#f87171";
+      if (ok) {
+        document.getElementById("current-pin-input").value = "";
+        document.getElementById("new-pin-input").value = "";
+        document.getElementById("confirm-pin-input").value = "";
+      }
+    };
+
+    document.getElementById("save-pin-btn").addEventListener("click", () => {
+      const current_pin = document.getElementById("current-pin-input").value.trim();
+      const new_pin = document.getElementById("new-pin-input").value.trim();
+      const confirm_pin = document.getElementById("confirm-pin-input").value.trim();
+      if (new_pin.length < 4) {
+        window.__onPinResult(false, "PIN must be at least 4 characters.");
+        return;
+      }
+      if (new_pin !== confirm_pin) {
+        window.__onPinResult(false, "New PIN and confirmation do not match.");
+        return;
+      }
+      post({
+        type: "set_lock_pin",
+        current_pin: current_pin || null,
+        new_pin,
+      });
+    });
+
+    document.getElementById("clear-pin-btn").addEventListener("click", () => {
+      const current_pin = document.getElementById("current-pin-input").value.trim();
+      post({
+        type: "clear_lock_pin",
+        current_pin: current_pin || null,
+      });
+    });
 
     post({ type: "settings_ready" });
   </script>

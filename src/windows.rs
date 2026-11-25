@@ -18,8 +18,12 @@ pub fn pump_runloop_for_flush(millis: u64) {
 
 pub fn preview_sound(_sound_name: &str) {}
 
+pub fn can_authenticate_biometric() -> bool {
+    false
+}
+
 pub fn authenticate_touch_id(_reason: &str) -> bool {
-    true
+    false
 }
 
 pub fn is_low_power_mode() -> bool {

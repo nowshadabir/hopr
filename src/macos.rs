@@ -53,12 +53,20 @@ pub fn preview_sound(sound_name: &str) {
     }
 }
 
+pub fn can_authenticate_biometric() -> bool {
+    unsafe {
+        let context = LAContext::new();
+        let policy = LAPolicy::DeviceOwnerAuthentication;
+        context.canEvaluatePolicy_error(policy).is_ok()
+    }
+}
+
 pub fn authenticate_touch_id(reason: &str) -> bool {
     unsafe {
         let context = LAContext::new();
         let policy = LAPolicy::DeviceOwnerAuthentication;
         if !context.canEvaluatePolicy_error(policy).is_ok() {
-            return true;
+            return false;
         }
         let (tx, rx) = std::sync::mpsc::channel();
         let block = RcBlock::new(move |success: objc2::runtime::Bool, _err: *mut NSError| {

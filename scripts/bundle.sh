@@ -65,11 +65,35 @@ fi
 
 ICON_SRC=""
 TMP_ICON_RENDER=""
-if [[ -f "logo.svg" ]]; then
+if [[ -f "hopr-logo.png" ]]; then
   TMP_ICON_RENDER=$(mktemp -d)
   if command -v swift >/dev/null 2>&1 && swift -e '
 import AppKit
-let url = URL(fileURLWithPath: "logo.svg")
+let url = URL(fileURLWithPath: "hopr-logo.png")
+if let img = NSImage(contentsOf: url),
+   let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024, pixelsHigh: 1024, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) {
+  NSGraphicsContext.saveGraphicsState()
+  NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+  NSColor.clear.set()
+  NSRect(x: 0, y: 0, width: 1024, height: 1024).fill()
+  img.draw(in: NSRect(x: 62, y: 62, width: 900, height: 900))
+  NSGraphicsContext.restoreGraphicsState()
+  if let data = rep.representation(using: .png, properties: [:]) {
+    try? data.write(to: URL(fileURLWithPath: "'"${TMP_ICON_RENDER}/hopr-logo-1024.png"'"))
+  }
+}
+' >/dev/null 2>&1 && [[ -f "${TMP_ICON_RENDER}/hopr-logo-1024.png" ]]; then
+    ICON_SRC="${TMP_ICON_RENDER}/hopr-logo-1024.png"
+  else
+    ICON_SRC="hopr-logo.png"
+  fi
+elif [[ -f "hopr-logo.svg" || -f "logo.svg" ]]; then
+  SVG_FILE="hopr-logo.svg"
+  [[ -f "$SVG_FILE" ]] || SVG_FILE="logo.svg"
+  TMP_ICON_RENDER=$(mktemp -d)
+  if command -v swift >/dev/null 2>&1 && swift -e '
+import AppKit
+let url = URL(fileURLWithPath: "'"${SVG_FILE}"'")
 if let img = NSImage(contentsOf: url),
    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024, pixelsHigh: 1024, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) {
   NSGraphicsContext.saveGraphicsState()
@@ -84,8 +108,8 @@ if let img = NSImage(contentsOf: url),
 }
 ' >/dev/null 2>&1 && [[ -f "${TMP_ICON_RENDER}/logo.svg.png" ]]; then
     ICON_SRC="${TMP_ICON_RENDER}/logo.svg.png"
-  elif command -v qlmanage >/dev/null 2>&1 && qlmanage -t -s 1024 -o "$TMP_ICON_RENDER" "logo.svg" >/dev/null 2>&1 && [[ -f "${TMP_ICON_RENDER}/logo.svg.png" ]]; then
-    ICON_SRC="${TMP_ICON_RENDER}/logo.svg.png"
+  elif command -v qlmanage >/dev/null 2>&1 && qlmanage -t -s 1024 -o "$TMP_ICON_RENDER" "$SVG_FILE" >/dev/null 2>&1 && [[ -f "${TMP_ICON_RENDER}/${SVG_FILE}.png" ]]; then
+    ICON_SRC="${TMP_ICON_RENDER}/${SVG_FILE}.png"
   fi
 fi
 if [[ -z "$ICON_SRC" && -f "logo.png" ]]; then
