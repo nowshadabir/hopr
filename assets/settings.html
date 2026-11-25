@@ -6,30 +6,52 @@
   <title>Hopr Settings</title>
   <style>
     :root {
+      --nav-bg: #ebe8df;
+      --nav-active: #ffffff;
+      --nav-hover: rgba(0, 0, 0, 0.045);
       --bg: #f7f5ef;
+      --card-bg: #ffffff;
       --border: rgba(0, 0, 0, 0.08);
-      --text: #181a18;
-      --muted: #6e726d;
-      --accent: #0d5c3e;
+      --input-border: rgba(0, 0, 0, 0.14);
+      --text: #161816;
+      --muted: #6c706a;
+      --accent: #0e5a46;
+      --accent-hover: #0a4636;
       --toggle-off: #cbc7bd;
       --btn-bg: #ffffff;
-      --btn-border: rgba(0, 0, 0, 0.14);
-      --btn-hover: #f1efe8;
+      --btn-hover: #f2f0ea;
       --danger: #dc2626;
+      --pill-live-bg: #dff2e7;
+      --pill-live-fg: #0d5c3e;
+      --pill-bg-bg: #fef3c7;
+      --pill-bg-fg: #92400e;
+      --pill-sleep-bg: #ece9e1;
+      --pill-sleep-fg: #5c5a54;
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
+        --nav-bg: #161816;
+        --nav-active: #242724;
+        --nav-hover: rgba(255, 255, 255, 0.05);
         --bg: #1c1e1c;
+        --card-bg: #232623;
         --border: rgba(255, 255, 255, 0.08);
+        --input-border: rgba(255, 255, 255, 0.14);
         --text: #f2f2ee;
         --muted: #9ca09a;
-        --accent: #198754;
+        --accent: #167a5e;
+        --accent-hover: #136850;
         --toggle-off: #484b47;
-        --btn-bg: #272a27;
-        --btn-border: rgba(255, 255, 255, 0.14);
-        --btn-hover: #323632;
+        --btn-bg: #2a2d2a;
+        --btn-hover: #333733;
         --danger: #f87171;
+        --pill-live-bg: rgba(37, 211, 102, 0.16);
+        --pill-live-fg: #6ee7b7;
+        --pill-bg-bg: rgba(245, 158, 11, 0.18);
+        --pill-bg-fg: #fcd34d;
+        --pill-sleep-bg: rgba(255, 255, 255, 0.1);
+        --pill-sleep-fg: #b4b7b2;
       }
     }
 
@@ -47,90 +69,254 @@
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      overflow: hidden;
     }
 
-    .page {
-      max-width: 820px;
-      margin: 0 auto;
-      padding: 32px clamp(20px, 4vw, 44px) 48px;
-    }
-
-    .header-row {
+    .shell {
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 24px;
+      width: 100%;
+      height: 100%;
     }
 
-    h1 {
-      margin: 0 0 6px;
-      font-size: 24px;
+    /* Left settings navigation */
+    .settings-nav {
+      width: 204px;
+      flex-shrink: 0;
+      background: var(--nav-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 22px 12px 16px;
+    }
+
+    .nav-label {
+      font-size: 11px;
       font-weight: 700;
-      letter-spacing: -0.02em;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 10px 10px;
     }
 
-    .subtitle {
-      margin: 0;
+    .nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 9px 11px;
+      border-radius: 9px;
+      border: none;
+      background: transparent;
+      color: var(--text);
       font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.12s ease;
+    }
+
+    .nav-item:hover {
+      background: var(--nav-hover);
+    }
+
+    .nav-item.active {
+      background: var(--nav-active);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    .nav-item svg {
+      width: 16px;
+      height: 16px;
+      opacity: 0.78;
+      flex-shrink: 0;
+    }
+
+    .nav-footer {
+      padding: 10px 10px 0;
+      font-size: 11.5px;
       color: var(--muted);
     }
 
+    /* Main scrollable pane */
+    .main {
+      flex: 1;
+      height: 100%;
+      overflow-y: auto;
+      padding: 26px clamp(20px, 4vw, 40px) 56px;
+      scroll-behavior: smooth;
+    }
+
+    .page-inner {
+      max-width: 740px;
+      margin: 0 auto;
+    }
+
+    .top-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+
     .done-btn {
-      height: 32px;
-      padding: 0 14px;
-      border-radius: 8px;
-      border: 1px solid var(--btn-border);
-      background: var(--btn-bg);
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 500;
+      height: 34px;
+      padding: 0 18px;
+      border-radius: 9px;
+      border: none;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 13.5px;
+      font-weight: 600;
       cursor: pointer;
+      transition: background 0.12s ease;
     }
 
     .done-btn:hover {
-      background: var(--btn-hover);
+      background: var(--accent-hover);
     }
 
-    .list {
-      border-top: 1px solid var(--border);
-    }
-
-    .row {
+    /* Hero summary banner */
+    .hero-card {
+      position: relative;
+      overflow: hidden;
+      background: #0e5a46;
+      color: #ffffff;
+      border-radius: 16px;
+      padding: 20px 22px;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px 16px;
-      padding: 15px 0;
-      border-bottom: 1px solid var(--border);
+      gap: 18px;
+      margin-bottom: 18px;
     }
 
-    .acct-card {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding: 16px 0;
-      border-bottom: 1px solid var(--border);
+    .hero-arc {
+      position: absolute;
+      right: -18px;
+      bottom: -34px;
+      width: 170px;
+      height: 170px;
+      border-radius: 50%;
+      border: 14px solid rgba(255, 255, 255, 0.08);
+      pointer-events: none;
     }
 
-    .acct-top {
+    .hero-dot {
+      position: absolute;
+      right: 18px;
+      bottom: 8px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fdc757;
+      pointer-events: none;
+    }
+
+    .hero-avatars {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px 16px;
+      flex-shrink: 0;
     }
 
-    .acct-actions {
+    .hero-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 2.5px solid #0e5a46;
+      overflow: hidden;
       display: flex;
       align-items: center;
+      justify-content: center;
+      background: #1a735b;
+      margin-left: -12px;
+    }
+
+    .hero-avatar:first-child {
+      margin-left: 0;
+    }
+
+    .hero-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .hero-text {
+      position: relative;
+      z-index: 1;
+      min-width: 0;
+    }
+
+    .hero-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .hero-sub {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+      margin-bottom: 10px;
+    }
+
+    .hero-pills {
+      display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      padding-left: 58px;
     }
 
-    .row-left {
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .dot-green { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; }
+    .dot-amber { width: 7px; height: 7px; border-radius: 50%; background: #fdc757; }
+
+    /* Account cards */
+    .accounts-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+    }
+
+    .acct-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .acct-identity {
       display: flex;
       align-items: center;
       gap: 14px;
@@ -138,25 +324,26 @@
       min-width: 220px;
     }
 
-    .row-info {
-      min-width: 0;
-      flex: 1;
-    }
-
-    .avatar {
+    .avatar-btn {
       position: relative;
-      width: 44px;
-      height: 44px;
+      width: 46px;
+      height: 46px;
       border-radius: 50%;
+      border: none;
+      padding: 0;
       background: #135d43;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      flex-shrink: 0;
       cursor: pointer;
-      border: none;
-      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .avatar-btn img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
 
     .avatar-overlay {
@@ -171,38 +358,129 @@
       transition: opacity 0.14s ease;
     }
 
-    .avatar:hover .avatar-overlay {
+    .avatar-btn:hover .avatar-overlay {
       opacity: 1;
     }
 
-    .avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .row-title {
-      font-size: 15px;
-      font-weight: 600;
-      margin-bottom: 2px;
-    }
-
-    .row-sub {
-      font-size: 12.5px;
-      color: var(--muted);
-      word-break: break-word;
-    }
-
-    .row-right {
+    .name-line {
       display: flex;
       align-items: center;
+      gap: 8px;
       flex-wrap: wrap;
-      gap: 10px;
-      flex-shrink: 0;
     }
 
-    .toggle-label {
+    .name-input {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 650;
+      padding: 2px 6px;
+      margin-left: -6px;
+      border-radius: 6px;
+      max-width: 210px;
+      outline: none;
+    }
+
+    .name-input:hover { border-color: var(--input-border); }
+    .name-input:focus { border-color: var(--accent); background: var(--btn-bg); }
+
+    .state-pill {
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 2px 9px;
+      border-radius: 999px;
+    }
+
+    .state-active, .state-background {
+      background: var(--pill-live-bg);
+      color: var(--pill-live-fg);
+    }
+
+    .state-hibernated {
+      background: var(--pill-sleep-bg);
+      color: var(--pill-sleep-fg);
+    }
+
+    .acct-sub {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .head-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-outline {
+      height: 30px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid var(--input-border);
+      background: var(--btn-bg);
+      color: var(--text);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .btn-outline:hover { background: var(--btn-hover); }
+    .btn-outline.danger { color: var(--danger); }
+
+    .fields-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .field-control {
+      width: 100%;
+      height: 34px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid var(--input-border);
+      background: var(--btn-bg);
+      color: var(--text);
       font-size: 13px;
+      outline: none;
+    }
+
+    .field-control:focus {
+      border-color: var(--accent);
+    }
+
+    .toggles-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px 28px;
+      padding-top: 2px;
+    }
+
+    .toggle-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .toggle-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .toggle-sub {
+      font-size: 11.5px;
       color: var(--muted);
     }
 
@@ -215,12 +493,11 @@
       background: var(--toggle-off);
       cursor: pointer;
       padding: 0;
+      flex-shrink: 0;
       transition: background 0.16s ease;
     }
 
-    .switch.on {
-      background: var(--accent);
-    }
+    .switch.on { background: var(--accent); }
 
     .switch::after {
       content: "";
@@ -235,196 +512,312 @@
       transition: transform 0.16s ease;
     }
 
-    .switch.on::after {
-      transform: translateX(20px);
-    }
-
-    .ghost-btn {
-      border: none;
-      background: transparent;
-      color: var(--muted);
-      font-size: 12px;
-      cursor: pointer;
-      padding: 4px 6px;
-      border-radius: 6px;
-    }
-
-    .ghost-btn:hover {
-      background: var(--btn-hover);
-      color: var(--text);
-    }
-
-    .ghost-btn.danger:hover {
-      color: var(--danger);
-    }
+    .switch.on::after { transform: translateX(20px); }
 
     .add-acct-btn {
-      margin-top: 18px;
-      height: 36px;
+      margin-top: 14px;
+      height: 38px;
       padding: 0 18px;
-      border-radius: 9px;
-      border: 1px solid var(--btn-border);
-      background: var(--btn-bg);
-      color: var(--text);
-      font-size: 13.5px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .add-acct-btn:hover {
-      background: var(--btn-hover);
-    }
-
-    h2 {
-      margin: 34px 0 10px;
-      font-size: 16px;
-      font-weight: 700;
-    }
-
-    .pref-btn {
-      border: none;
+      border-radius: 10px;
+      border: 1.5px dashed var(--input-border);
       background: transparent;
-      color: var(--accent);
+      color: var(--text);
       font-size: 13.5px;
       font-weight: 600;
       cursor: pointer;
-      padding: 4px 8px;
-      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    .pref-btn:hover {
-      background: var(--btn-hover);
+    .add-acct-btn:hover { background: var(--nav-hover); }
+
+    /* Section headings & grouped setting rows */
+    .section-head {
+      margin: 30px 0 12px;
     }
 
-    .group-input {
-      width: 148px;
-      height: 28px;
-      padding: 0 9px;
-      border-radius: 7px;
-      border: 1px solid var(--btn-border);
-      background: var(--btn-bg);
-      color: var(--text);
+    .section-head h2 {
+      margin: 0 0 3px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+    }
+
+    .section-sub {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .card-list {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .list-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .list-row:last-child { border-bottom: none; }
+
+    .row-meta-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .row-meta-sub {
       font-size: 12px;
-      outline: none;
+      color: var(--muted);
     }
 
-    .name-input {
-      border: 1px solid transparent;
+    .stepper {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      background: var(--btn-bg);
+      overflow: hidden;
+    }
+
+    .stepper button {
+      width: 30px;
+      height: 30px;
+      border: none;
       background: transparent;
       color: var(--text);
       font-size: 15px;
+      cursor: pointer;
+    }
+
+    .stepper button:hover { background: var(--btn-hover); }
+
+    .stepper span {
+      min-width: 28px;
+      text-align: center;
+      font-size: 13px;
       font-weight: 600;
-      padding: 2px 6px;
-      margin-left: -6px;
-      border-radius: 6px;
-      width: min(240px, 100%);
-      outline: none;
-    }
-
-    .name-input:hover {
-      border-color: var(--btn-border);
-    }
-
-    .name-input:focus {
-      border-color: var(--accent);
-      background: var(--btn-bg);
     }
 
     .reminder-form {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin: 12px 0 16px;
-      align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
     }
 
-    .reminder-input, .reminder-select {
-      height: 32px;
-      padding: 0 10px;
-      border-radius: 8px;
-      border: 1px solid var(--btn-border);
-      background: var(--btn-bg);
-      color: var(--text);
-      font-size: 13px;
-      outline: none;
+    .reminder-form .field-control {
+      width: auto;
     }
 
-    .reminder-input {
+    .reminder-note {
       flex: 1;
-      min-width: 180px;
+      min-width: 170px;
+    }
+
+    @media (max-width: 680px) {
+      .settings-nav {
+        width: 156px;
+        padding: 16px 8px;
+      }
+      .hero-card {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="page">
-    <div class="header-row">
-      <div>
-        <h1>Accounts</h1>
-        <p class="subtitle">Photo and name sync automatically from each linked WhatsApp account.</p>
-      </div>
-      <button id="done-btn" class="done-btn">Done</button>
-    </div>
+  <div class="shell">
+    <aside class="settings-nav">
+      <div class="nav-label">Settings</div>
+      <nav class="nav-list">
+        <button class="nav-item active" data-target="sec-accounts">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Accounts
+        </button>
+        <button class="nav-item" data-target="sec-lifecycle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          Lifecycle
+        </button>
+        <button class="nav-item" data-target="sec-notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          Notifications
+        </button>
+        <button class="nav-item" data-target="sec-reminders">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Reminders
+        </button>
+        <button class="nav-item" data-target="sec-privacy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Privacy &amp; security
+        </button>
+        <button class="nav-item" data-target="sec-about">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          About
+        </button>
+      </nav>
+      <div class="nav-footer">Hopr by Vivago Technologies</div>
+    </aside>
 
-    <div id="accounts-list" class="list"></div>
-    <input id="avatar-picker" type="file" accept="image/*" style="display: none;" />
-    <button id="add-acct-btn" class="add-acct-btn">Add account</button>
+    <main class="main" id="main-scroll">
+      <div class="page-inner">
+        <div id="sec-accounts" class="top-header">
+          <h1>Accounts</h1>
+          <button id="done-btn" class="done-btn">Done</button>
+        </div>
 
-    <h2>Reminders</h2>
-    <p class="subtitle">Schedule local follow-up reminders without any WhatsApp message automation.</p>
-    <div class="reminder-form">
-      <select id="reminder-acct" class="reminder-select"></select>
-      <input id="reminder-note" class="reminder-input" type="text" placeholder="Reminder note (e.g. Follow up tomorrow)" />
-      <select id="reminder-delay" class="reminder-select">
-        <option value="60">In 1 min</option>
-        <option value="3600" selected>In 1 hour</option>
-        <option value="10800">In 3 hours</option>
-        <option value="86400">Tomorrow</option>
-      </select>
-      <button id="add-reminder-btn" class="done-btn">Add reminder</button>
-    </div>
-    <div id="reminders-list" class="list"></div>
+        <div class="hero-card">
+          <div class="hero-arc"></div>
+          <div class="hero-dot"></div>
+          <div id="hero-avatars" class="hero-avatars"></div>
+          <div class="hero-text">
+            <div id="hero-title" class="hero-title">Accounts</div>
+            <div class="hero-sub">Photo and name sync from each WhatsApp account.</div>
+            <div class="hero-pills">
+              <span class="hero-pill"><span class="dot-green"></span><span id="pill-live">0 live</span></span>
+              <span class="hero-pill"><span class="dot-amber"></span><span id="pill-asleep">0 asleep</span></span>
+              <span id="pill-idle" class="hero-pill">Idle sleep: 15 min</span>
+            </div>
+          </div>
+        </div>
 
-    <h2>Lifecycle &amp; Window</h2>
-    <div class="list">
-      <div class="row">
-        <div class="row-title" style="font-weight: 500; font-size: 14px;">Auto-hibernate inactive accounts</div>
-        <button id="hibernate-mins-btn" class="pref-btn">15 min</button>
-      </div>
-      <div class="row">
-        <div class="row-title" style="font-weight: 500; font-size: 14px;">Max live webviews</div>
-        <button id="max-live-btn" class="pref-btn">3</button>
-      </div>
-      <div class="row">
-        <div class="row-title" style="font-weight: 500; font-size: 14px;">Periodic wake (30s sync every 10 min)</div>
-        <button id="periodic-wake-btn" class="pref-btn">Off</button>
-      </div>
-      <div class="row">
-        <div class="row-title" style="font-weight: 500; font-size: 14px;">Quit app when window is closed</div>
-        <button id="quit-on-close-btn" class="pref-btn">Off</button>
-      </div>
-      <div class="row">
-        <div class="row-title" style="font-weight: 500; font-size: 14px;">Launch at login (starts hidden in menu bar)</div>
-        <button id="launch-login-btn" class="pref-btn">Off</button>
-      </div>
-    </div>
+        <div id="accounts-list" class="accounts-stack"></div>
+        <button id="add-acct-btn" class="add-acct-btn">+ Add account</button>
 
-    <h2>Notifications &amp; Privacy</h2>
-    <div class="list">
-      <div class="row">
-        <div class="row-title" style="font-weight: 500; font-size: 14px;">Show message previews</div>
-        <button id="previews-btn" class="pref-btn">On</button>
+        <div id="sec-lifecycle" class="section-head">
+          <h2>Lifecycle &amp; window</h2>
+          <p class="section-sub">Control when accounts sleep and how the window behaves.</p>
+        </div>
+        <div class="card-list">
+          <div class="list-row">
+            <div>
+              <div class="row-meta-title">Auto-hibernate inactive accounts</div>
+              <div class="row-meta-sub">Release the webview after a period without use</div>
+            </div>
+            <select id="hibernate-mins-select" class="field-control" style="width: 112px;">
+              <option value="5">5 min</option>
+              <option value="15">15 min</option>
+              <option value="30">30 min</option>
+              <option value="60">60 min</option>
+            </select>
+          </div>
+          <div class="list-row">
+            <div>
+              <div class="row-meta-title">Max live webviews</div>
+              <div class="row-meta-sub">Least recently used accounts sleep when this is exceeded</div>
+            </div>
+            <div class="stepper">
+              <button id="max-live-dec" type="button">−</button>
+              <span id="max-live-val">3</span>
+              <button id="max-live-inc" type="button">+</button>
+            </div>
+          </div>
+          <div class="list-row">
+            <div>
+              <div class="row-meta-title">Periodic wake</div>
+              <div class="row-meta-sub">Briefly load sleeping accounts to sync every 10 min</div>
+            </div>
+            <button id="periodic-wake-sw" class="switch" type="button"></button>
+          </div>
+          <div class="list-row">
+            <div>
+              <div class="row-meta-title">Quit when window is closed</div>
+              <div class="row-meta-sub">Otherwise Hopr keeps running in the menu bar</div>
+            </div>
+            <button id="quit-on-close-sw" class="switch" type="button"></button>
+          </div>
+          <div class="list-row">
+            <div>
+              <div class="row-meta-title">Launch at login</div>
+              <div class="row-meta-sub">Start hidden in the menu bar</div>
+            </div>
+            <button id="launch-login-sw" class="switch" type="button"></button>
+          </div>
+        </div>
+
+        <div id="sec-notifications" class="section-head">
+          <h2>Notifications</h2>
+          <p class="section-sub">After quitting Hopr, no notifications arrive until you reopen it.</p>
+        </div>
+        <div class="card-list">
+          <div class="list-row">
+            <div>
+              <div class="row-meta-title">Show message previews</div>
+              <div class="row-meta-sub">Hide sender and message text when off or account is locked</div>
+            </div>
+            <button id="previews-sw" class="switch" type="button"></button>
+          </div>
+          <div class="list-row">
+            <div>
+              <div class="row-meta-title">Badge on Dock icon</div>
+              <div class="row-meta-sub">Show total unread count across live accounts</div>
+            </div>
+            <button id="dock-badge-sw" class="switch" type="button"></button>
+          </div>
+        </div>
+
+        <div id="sec-reminders" class="section-head">
+          <h2>Reminders</h2>
+          <p class="section-sub">Schedule local follow-up reminders without any WhatsApp message automation.</p>
+        </div>
+        <div class="card-list">
+          <div class="reminder-form">
+            <select id="reminder-acct" class="field-control"></select>
+            <input id="reminder-note" class="field-control reminder-note" type="text" placeholder="Reminder note (e.g. Follow up tomorrow)" />
+            <select id="reminder-delay" class="field-control">
+              <option value="60">In 1 min</option>
+              <option value="3600" selected>In 1 hour</option>
+              <option value="10800">In 3 hours</option>
+              <option value="86400">Tomorrow</option>
+            </select>
+            <button id="add-reminder-btn" class="btn-outline" type="button">Add reminder</button>
+          </div>
+          <div id="reminders-list"></div>
+        </div>
+
+        <div id="sec-privacy" class="section-head">
+          <h2>Privacy &amp; security</h2>
+          <p class="section-sub">Each account runs in its own isolated WKWebsiteDataStore on this Mac.</p>
+        </div>
+        <div class="card-list">
+          <div class="list-row">
+            <div>
+              <div class="row-meta-title">Local storage &amp; permissions</div>
+              <div class="row-meta-sub">Config and cached avatars are stored in ~/Library/Application Support/Hopr (0700/0600) and protected at rest by FileVault.</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="sec-about" class="section-head">
+          <h2>About</h2>
+          <p class="section-sub">Built by Vivago Technologies.</p>
+        </div>
+        <div class="card-list">
+          <div class="list-row">
+            <div>
+              <div class="row-meta-title">Hopr for macOS</div>
+              <div class="row-meta-sub">Lightweight multi-account WhatsApp Web shell with smart hibernation and Sparkle updates.</div>
+            </div>
+            <button id="check-updates-btn" class="btn-outline" type="button">Check for Updates…</button>
+          </div>
+        </div>
       </div>
-      <div class="row">
-        <div class="row-title" style="font-weight: 500; font-size: 14px;">Badge on Dock icon</div>
-        <button id="dock-badge-btn" class="pref-btn">Total unread</button>
-      </div>
-    </div>
-    <p class="subtitle" style="margin-top: 18px;">
-      Built by Vivago.
-    </p>
+    </main>
   </div>
 
   <script>
+    const SOUNDS = ["default", "Glass", "Ping", "Pop", "Purr", "Submarine", "Tink"];
     const post = (payload) => {
       try {
         window.webkit.messageHandlers.ipc.postMessage(JSON.stringify(payload));
@@ -432,7 +825,7 @@
     };
 
     const avatarFallbackSvg = () => `
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="rgba(255,255,255,0.88)">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="rgba(255,255,255,0.9)">
         <circle cx="12" cy="8.5" r="4.2"/>
         <path d="M4.5 20.5c0-3.9 3.35-6.5 7.5-6.5s7.5 2.6 7.5 6.5"/>
       </svg>`;
@@ -445,44 +838,39 @@
         </svg>
       </span>`;
 
-    const openAvatarPicker = (accountId) => {
-      post({ type: "pick_custom_avatar", id: accountId });
-    };
-
-    document.getElementById("done-btn").addEventListener("click", () => {
-      post({ type: "close_settings" });
+    // Left settings navigation
+    document.querySelectorAll(".nav-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".nav-item").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const target = document.getElementById(btn.dataset.target);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     });
 
-    document.getElementById("add-acct-btn").addEventListener("click", () => {
-      post({ type: "add_account" });
+    let latestState = null;
+
+    document.getElementById("done-btn").addEventListener("click", () => post({ type: "close_settings" }));
+    document.getElementById("add-acct-btn").addEventListener("click", () => post({ type: "add_account" }));
+    document.getElementById("periodic-wake-sw").addEventListener("click", () => post({ type: "toggle_periodic_wake" }));
+    document.getElementById("quit-on-close-sw").addEventListener("click", () => post({ type: "toggle_quit_on_close" }));
+    document.getElementById("launch-login-sw").addEventListener("click", () => post({ type: "toggle_launch_at_login" }));
+    document.getElementById("previews-sw").addEventListener("click", () => post({ type: "toggle_previews" }));
+    document.getElementById("dock-badge-sw").addEventListener("click", () => post({ type: "toggle_dock_badge" }));
+    document.getElementById("check-updates-btn").addEventListener("click", () => post({ type: "check_for_updates" }));
+
+    document.getElementById("hibernate-mins-select").addEventListener("change", (e) => {
+      post({ type: "set_hibernate_mins", mins: parseInt(e.target.value, 10) || 15 });
     });
 
-    document.getElementById("previews-btn").addEventListener("click", () => {
-      post({ type: "toggle_previews" });
+    document.getElementById("max-live-dec").addEventListener("click", () => {
+      const cur = (latestState && latestState.max_live_webviews) || 3;
+      if (cur > 1) post({ type: "set_max_live", max_live: cur - 1 });
     });
 
-    document.getElementById("dock-badge-btn").addEventListener("click", () => {
-      post({ type: "toggle_dock_badge" });
-    });
-
-    document.getElementById("hibernate-mins-btn").addEventListener("click", () => {
-      post({ type: "cycle_hibernate_mins" });
-    });
-
-    document.getElementById("max-live-btn").addEventListener("click", () => {
-      post({ type: "cycle_max_live" });
-    });
-
-    document.getElementById("periodic-wake-btn").addEventListener("click", () => {
-      post({ type: "toggle_periodic_wake" });
-    });
-
-    document.getElementById("quit-on-close-btn").addEventListener("click", () => {
-      post({ type: "toggle_quit_on_close" });
-    });
-
-    document.getElementById("launch-login-btn").addEventListener("click", () => {
-      post({ type: "toggle_launch_at_login" });
+    document.getElementById("max-live-inc").addEventListener("click", () => {
+      const cur = (latestState && latestState.max_live_webviews) || 3;
+      if (cur < 9) post({ type: "set_max_live", max_live: cur + 1 });
     });
 
     document.getElementById("add-reminder-btn").addEventListener("click", () => {
@@ -495,173 +883,206 @@
       post({ type: "add_reminder", account_id, note, delay_secs });
     });
 
-    post({ type: "settings_ready" });
-
     window.__updateSettings = (state) => {
+      latestState = state;
+      const accounts = state.accounts || [];
+
+      // Hero banner
+      const liveCount = accounts.filter((a) => a.lifecycle !== "hibernated").length;
+      const asleepCount = accounts.length - liveCount;
+      document.getElementById("hero-title").textContent =
+        accounts.length === 1 ? "1 account linked" : `${accounts.length} accounts linked`;
+      document.getElementById("pill-live").textContent = `${liveCount} live`;
+      document.getElementById("pill-asleep").textContent = `${asleepCount} asleep`;
+      document.getElementById("pill-idle").textContent = `Idle sleep: ${state.hibernate_after_mins} min`;
+
+      const heroAvatars = document.getElementById("hero-avatars");
+      heroAvatars.innerHTML = "";
+      for (const acct of accounts.slice(0, 4)) {
+        const av = document.createElement("div");
+        av.className = "hero-avatar";
+        av.style.backgroundColor = acct.color || "#135D43";
+        av.innerHTML = acct.avatar_url ? `<img src="${acct.avatar_url}" alt="" />` : avatarFallbackSvg();
+        heroAvatars.appendChild(av);
+      }
+
+      // Account cards
       const list = document.getElementById("accounts-list");
       list.innerHTML = "";
-      const accounts = state.accounts || [];
 
       for (const acct of accounts) {
         const card = document.createElement("div");
-        card.className = "acct-card";
+        card.className = "card";
 
-        const top = document.createElement("div");
-        top.className = "acct-top";
+        const head = document.createElement("div");
+        head.className = "acct-head";
 
-        const left = document.createElement("div");
-        left.className = "row-left";
+        const ident = document.createElement("div");
+        ident.className = "acct-identity";
 
-        const avatar = document.createElement("button");
-        avatar.type = "button";
-        avatar.className = "avatar";
-        avatar.title = "Change photo (this device only)";
-        avatar.style.backgroundColor = acct.color || "#135D43";
-        if (acct.avatar_url) {
-          avatar.innerHTML = `<img src="${acct.avatar_url}" alt="" />` + cameraOverlayHtml;
-        } else {
-          avatar.innerHTML = avatarFallbackSvg() + cameraOverlayHtml;
-        }
-        avatar.addEventListener("click", () => openAvatarPicker(acct.id));
+        const avBtn = document.createElement("button");
+        avBtn.type = "button";
+        avBtn.className = "avatar-btn";
+        avBtn.title = "Change photo (this device only)";
+        avBtn.style.backgroundColor = acct.color || "#135D43";
+        avBtn.innerHTML = (acct.avatar_url ? `<img src="${acct.avatar_url}" alt="" />` : avatarFallbackSvg()) + cameraOverlayHtml;
+        avBtn.addEventListener("click", () => post({ type: "pick_custom_avatar", id: acct.id }));
 
         const info = document.createElement("div");
-        info.className = "row-info";
-        const titleInput = document.createElement("input");
-        titleInput.type = "text";
-        titleInput.className = "name-input";
-        titleInput.value = acct.name;
-        titleInput.title = "Click to rename account";
-        titleInput.addEventListener("change", () => {
-          post({ type: "rename_account", id: acct.id, name: titleInput.value });
-        });
-        titleInput.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") titleInput.blur();
-        });
+        const nameLine = document.createElement("div");
+        nameLine.className = "name-line";
+
+        const nameInput = document.createElement("input");
+        nameInput.type = "text";
+        nameInput.className = "name-input";
+        nameInput.value = acct.name;
+        nameInput.title = "Click to rename account";
+        nameInput.addEventListener("change", () => post({ type: "rename_account", id: acct.id, name: nameInput.value }));
+        nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") nameInput.blur(); });
+
+        const pill = document.createElement("span");
+        pill.className = `state-pill state-${acct.lifecycle}`;
+        pill.textContent = acct.lifecycle === "hibernated" ? "Hibernated" : acct.lifecycle === "active" ? "Live" : "Background";
+
+        nameLine.appendChild(nameInput);
+        nameLine.appendChild(pill);
 
         const sub = document.createElement("div");
-        sub.className = "row-sub";
-        const parts = [acct.label];
-        if (acct.phone) parts.push(acct.phone);
-        parts.push(acct.short_sleep_summary);
-        sub.textContent = parts.filter(Boolean).join(" · ");
+        sub.className = "acct-sub";
+        sub.textContent = [acct.phone, acct.label].filter(Boolean).join(" · ");
 
-        info.appendChild(titleInput);
+        info.appendChild(nameLine);
         info.appendChild(sub);
-        left.appendChild(avatar);
-        left.appendChild(info);
+        ident.appendChild(avBtn);
+        ident.appendChild(info);
 
-        const pinGroup = document.createElement("div");
-        pinGroup.className = "row-right";
-
-        const label = document.createElement("span");
-        label.className = "toggle-label";
-        label.textContent = "Always connected";
-
-        const sw = document.createElement("button");
-        sw.className = "switch" + (acct.keep_connected ? " on" : "");
-        sw.setAttribute("aria-pressed", String(Boolean(acct.keep_connected)));
-        sw.addEventListener("click", () => {
-          post({
-            type: "set_keep_connected",
-            id: acct.id,
-            keep_connected: !acct.keep_connected,
-          });
-        });
-
-        pinGroup.appendChild(label);
-        pinGroup.appendChild(sw);
-
-        top.appendChild(left);
-        top.appendChild(pinGroup);
-
-        const actions = document.createElement("div");
-        actions.className = "acct-actions";
-
-        const groupInput = document.createElement("input");
-        groupInput.type = "text";
-        groupInput.className = "group-input";
-        groupInput.placeholder = "Group (e.g. Office)";
-        groupInput.value = acct.group || "";
-        groupInput.title = "Group accounts under a collapsible sidebar section";
-        groupInput.addEventListener("change", () => {
-          post({
-            type: "set_group",
-            id: acct.id,
-            group: groupInput.value.trim() || null,
-          });
-        });
-        actions.appendChild(groupInput);
-
-        const soundBtn = document.createElement("button");
-        soundBtn.className = "ghost-btn";
-        soundBtn.textContent = `🔔 ${acct.notif_sound || "default"}`;
-        soundBtn.title = "Change notification sound for this account";
-        soundBtn.addEventListener("click", () => {
-          post({ type: "cycle_notif_sound", id: acct.id });
-        });
-        actions.appendChild(soundBtn);
-
-        const lockBtn = document.createElement("button");
-        lockBtn.className = "ghost-btn";
-        lockBtn.textContent = acct.locked ? "🔒 Locked" : "Unlock";
-        lockBtn.title = "Lock or unlock account with Touch ID";
-        lockBtn.addEventListener("click", () => {
-          post({ type: "toggle_account_lock", id: acct.id });
-        });
-        actions.appendChild(lockBtn);
+        const headActions = document.createElement("div");
+        headActions.className = "head-actions";
 
         const photoBtn = document.createElement("button");
-        photoBtn.className = "ghost-btn";
+        photoBtn.className = "btn-outline";
+        photoBtn.type = "button";
         photoBtn.textContent = "Change photo";
-        photoBtn.title = "Set custom photo for this device only";
-        photoBtn.addEventListener("click", () => openAvatarPicker(acct.id));
-        actions.appendChild(photoBtn);
+        photoBtn.addEventListener("click", () => post({ type: "pick_custom_avatar", id: acct.id }));
+        headActions.appendChild(photoBtn);
 
         if (acct.has_custom_avatar) {
           const resetBtn = document.createElement("button");
-          resetBtn.className = "ghost-btn";
-          resetBtn.textContent = "Reset photo";
-          resetBtn.addEventListener("click", () => {
-            post({ type: "set_custom_avatar", id: acct.id, avatar_url: null });
-          });
-          actions.appendChild(resetBtn);
+          resetBtn.className = "btn-outline";
+          resetBtn.type = "button";
+          resetBtn.textContent = "Reset";
+          resetBtn.addEventListener("click", () => post({ type: "set_custom_avatar", id: acct.id, avatar_url: null }));
+          headActions.appendChild(resetBtn);
         }
 
         if (accounts.length > 1) {
           const removeBtn = document.createElement("button");
-          removeBtn.className = "ghost-btn danger";
+          removeBtn.className = "btn-outline danger";
+          removeBtn.type = "button";
           removeBtn.textContent = "Remove";
           removeBtn.addEventListener("click", () => {
             if (confirm(`Remove "${acct.name}"? This will delete its local session and cached avatar on this Mac.`)) {
               post({ type: "remove_account", id: acct.id });
             }
           });
-          actions.appendChild(removeBtn);
+          headActions.appendChild(removeBtn);
         }
 
-        card.appendChild(top);
-        card.appendChild(actions);
+        head.appendChild(ident);
+        head.appendChild(headActions);
+
+        // 3-column fields
+        const grid = document.createElement("div");
+        grid.className = "fields-grid";
+
+        const gWrap = document.createElement("div");
+        gWrap.innerHTML = `<label class="field-label">Group</label>`;
+        const gInput = document.createElement("input");
+        gInput.type = "text";
+        gInput.className = "field-control";
+        gInput.placeholder = "e.g. Office";
+        gInput.value = acct.group || "";
+        gInput.addEventListener("change", () => post({ type: "set_group", id: acct.id, group: gInput.value.trim() || null }));
+        gWrap.appendChild(gInput);
+
+        const sWrap = document.createElement("div");
+        sWrap.innerHTML = `<label class="field-label">Notification sound</label>`;
+        const sSelect = document.createElement("select");
+        sSelect.className = "field-control";
+        for (const snd of SOUNDS) {
+          const opt = document.createElement("option");
+          opt.value = snd;
+          opt.textContent = snd === "default" ? "Default" : snd;
+          if ((acct.notif_sound || "default") === snd) opt.selected = true;
+          sSelect.appendChild(opt);
+        }
+        sSelect.addEventListener("change", () => post({ type: "set_notif_sound", id: acct.id, sound: sSelect.value }));
+        sWrap.appendChild(sSelect);
+
+        const slWrap = document.createElement("div");
+        slWrap.innerHTML = `<label class="field-label">Sleep after</label>`;
+        const slSelect = document.createElement("select");
+        slSelect.className = "field-control";
+        if (acct.keep_connected) {
+          slSelect.innerHTML = `<option value="never" selected>Never</option>`;
+          slSelect.disabled = true;
+        } else {
+          for (const m of [5, 15, 30, 60]) {
+            const opt = document.createElement("option");
+            opt.value = String(m);
+            opt.textContent = `${m} min`;
+            if (state.hibernate_after_mins === m) opt.selected = true;
+            slSelect.appendChild(opt);
+          }
+          slSelect.addEventListener("change", () => post({ type: "set_hibernate_mins", mins: parseInt(slSelect.value, 10) || 15 }));
+        }
+        slWrap.appendChild(slSelect);
+
+        grid.appendChild(gWrap);
+        grid.appendChild(sWrap);
+        grid.appendChild(slWrap);
+
+        // Toggles row
+        const toggles = document.createElement("div");
+        toggles.className = "toggles-row";
+
+        const pinItem = document.createElement("div");
+        pinItem.className = "toggle-item";
+        const pinSw = document.createElement("button");
+        pinSw.type = "button";
+        pinSw.className = "switch" + (acct.keep_connected ? " on" : "");
+        pinSw.addEventListener("click", () => post({ type: "set_keep_connected", id: acct.id, keep_connected: !acct.keep_connected }));
+        pinItem.appendChild(pinSw);
+        pinItem.insertAdjacentHTML("beforeend", `<div><div class="toggle-title">Always connected</div><div class="toggle-sub">Never hibernate this account</div></div>`);
+
+        const lockItem = document.createElement("div");
+        lockItem.className = "toggle-item";
+        const lockSw = document.createElement("button");
+        lockSw.type = "button";
+        lockSw.className = "switch" + (acct.locked ? " on" : "");
+        lockSw.addEventListener("click", () => post({ type: "toggle_account_lock", id: acct.id }));
+        lockItem.appendChild(lockSw);
+        lockItem.insertAdjacentHTML("beforeend", `<div><div class="toggle-title">Touch ID lock</div><div class="toggle-sub">Require unlock to open</div></div>`);
+
+        toggles.appendChild(pinItem);
+        toggles.appendChild(lockItem);
+
+        card.appendChild(head);
+        card.appendChild(grid);
+        card.appendChild(toggles);
         list.appendChild(card);
       }
 
-      document.getElementById("previews-btn").textContent = state.show_message_previews
-        ? "On"
-        : "Off";
-      document.getElementById("dock-badge-btn").textContent = state.dock_badge_enabled
-        ? "Total unread"
-        : "Off";
-      document.getElementById("hibernate-mins-btn").textContent = `${state.hibernate_after_mins} min`;
-      document.getElementById("max-live-btn").textContent = String(state.max_live_webviews);
-      document.getElementById("periodic-wake-btn").textContent = state.periodic_wake_enabled
-        ? "On"
-        : "Off";
-      document.getElementById("quit-on-close-btn").textContent = state.quit_on_close
-        ? "On"
-        : "Off";
-      document.getElementById("launch-login-btn").textContent = state.launch_at_login
-        ? "On"
-        : "Off";
+      // Lifecycle & Notifications controls
+      document.getElementById("hibernate-mins-select").value = String(state.hibernate_after_mins || 15);
+      document.getElementById("max-live-val").textContent = String(state.max_live_webviews || 3);
+      document.getElementById("periodic-wake-sw").classList.toggle("on", Boolean(state.periodic_wake_enabled));
+      document.getElementById("quit-on-close-sw").classList.toggle("on", Boolean(state.quit_on_close));
+      document.getElementById("launch-login-sw").classList.toggle("on", Boolean(state.launch_at_login));
+      document.getElementById("previews-sw").classList.toggle("on", Boolean(state.show_message_previews));
+      document.getElementById("dock-badge-sw").classList.toggle("on", Boolean(state.dock_badge_enabled));
 
+      // Reminders
       const acctSelect = document.getElementById("reminder-acct");
       const prevVal = acctSelect.value;
       acctSelect.innerHTML = "";
@@ -671,41 +1092,33 @@
         opt.textContent = acct.name;
         acctSelect.appendChild(opt);
       }
-      if (prevVal && accounts.some((a) => a.id === prevVal)) {
-        acctSelect.value = prevVal;
-      }
+      if (prevVal && accounts.some((a) => a.id === prevVal)) acctSelect.value = prevVal;
 
       const remList = document.getElementById("reminders-list");
       remList.innerHTML = "";
       const nowSecs = Math.floor(Date.now() / 1000);
       for (const rem of state.reminders || []) {
         const row = document.createElement("div");
-        row.className = "row";
+        row.className = "list-row";
         const acct = accounts.find((a) => a.id === rem.account_id);
         const minsLeft = Math.max(1, Math.round((rem.due_at_epoch_secs - nowSecs) / 60));
 
         const left = document.createElement("div");
-        const title = document.createElement("div");
-        title.className = "row-title";
-        title.textContent = rem.note;
-        const sub = document.createElement("div");
-        sub.className = "row-sub";
-        sub.textContent = `${acct ? acct.name : "Account"} · due in ~${minsLeft} min`;
-        left.appendChild(title);
-        left.appendChild(sub);
+        left.innerHTML = `<div class="row-meta-title">${rem.note.replace(/</g, "&lt;")}</div><div class="row-meta-sub">${acct ? acct.name : "Account"} · due in ~${minsLeft} min</div>`;
 
         const cancelBtn = document.createElement("button");
-        cancelBtn.className = "ghost-btn danger";
+        cancelBtn.className = "btn-outline danger";
+        cancelBtn.type = "button";
         cancelBtn.textContent = "Cancel";
-        cancelBtn.addEventListener("click", () => {
-          post({ type: "remove_reminder", id: rem.id });
-        });
+        cancelBtn.addEventListener("click", () => post({ type: "remove_reminder", id: rem.id }));
 
         row.appendChild(left);
         row.appendChild(cancelBtn);
         remList.appendChild(row);
       }
     };
+
+    post({ type: "settings_ready" });
   </script>
 </body>
 </html>

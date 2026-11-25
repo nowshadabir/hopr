@@ -367,6 +367,20 @@ impl AppConfig {
         "default".to_string()
     }
 
+    pub fn set_notif_sound(&mut self, id: Uuid, sound: String) -> String {
+        let valid = NOTIF_SOUNDS
+            .iter()
+            .find(|s| s.eq_ignore_ascii_case(sound.trim()))
+            .copied()
+            .unwrap_or("default")
+            .to_string();
+        if let Some(acct) = self.accounts.iter_mut().find(|a| a.id == id) {
+            acct.notif_sound = valid.clone();
+            let _ = self.save();
+        }
+        valid
+    }
+
     pub fn set_group(&mut self, id: Uuid, group: Option<String>) {
         let normalized = group.map(|g| g.trim().to_string()).filter(|g| !g.is_empty());
         if let Some(acct) = self.accounts.iter_mut().find(|a| a.id == id) {

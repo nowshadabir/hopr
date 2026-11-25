@@ -71,6 +71,7 @@ enum UiIpcMsg {
     SetKeepConnected { id: Uuid, keep_connected: bool },
     RenameAccount { id: Uuid, name: String },
     CycleNotifSound { id: Uuid },
+    SetNotifSound { id: Uuid, sound: String },
     SetGroup { id: Uuid, group: Option<String> },
     ToggleAccountLock { id: Uuid },
     AddReminder { account_id: Uuid, note: String, delay_secs: u64 },
@@ -83,10 +84,13 @@ enum UiIpcMsg {
     TogglePreviews,
     ToggleDockBadge,
     CycleHibernateMins,
+    SetHibernateMins { mins: u64 },
     CycleMaxLive,
+    SetMaxLive { max_live: usize },
     TogglePeriodicWake,
     ToggleQuitOnClose,
     ToggleLaunchAtLogin,
+    CheckForUpdates,
 }
 
 #[derive(Serialize)]
@@ -999,6 +1003,19 @@ fn main() {
                                     settings_open,
                                 );
                             }
+                            UiIpcMsg::SetNotifSound { id, sound } => {
+                                let chosen = cfg.set_notif_sound(id, sound);
+                                preview_sound(&chosen);
+                                sync_ui(
+                                    &sidebar,
+                                    settings_wv.as_ref(),
+                                    &menu_ids,
+                                    tray_icon.as_ref(),
+                                    &cfg,
+                                    &manager,
+                                    settings_open,
+                                );
+                            }
                             UiIpcMsg::SetGroup { id, group } => {
                                 cfg.set_group(id, group);
                                 sync_ui(
@@ -1183,6 +1200,19 @@ fn main() {
                                     settings_open,
                                 );
                             }
+                            UiIpcMsg::SetHibernateMins { mins } => {
+                                cfg.hibernate_after_mins = mins.clamp(1, 240);
+                                let _ = cfg.save();
+                                sync_ui(
+                                    &sidebar,
+                                    settings_wv.as_ref(),
+                                    &menu_ids,
+                                    tray_icon.as_ref(),
+                                    &cfg,
+                                    &manager,
+                                    settings_open,
+                                );
+                            }
                             UiIpcMsg::CycleMaxLive => {
                                 cfg.max_live_webviews = match cfg.max_live_webviews {
                                     1 => 2,
@@ -1201,6 +1231,22 @@ fn main() {
                                     &manager,
                                     settings_open,
                                 );
+                            }
+                            UiIpcMsg::SetMaxLive { max_live } => {
+                                cfg.max_live_webviews = max_live.clamp(1, 9);
+                                let _ = cfg.save();
+                                sync_ui(
+                                    &sidebar,
+                                    settings_wv.as_ref(),
+                                    &menu_ids,
+                                    tray_icon.as_ref(),
+                                    &cfg,
+                                    &manager,
+                                    settings_open,
+                                );
+                            }
+                            UiIpcMsg::CheckForUpdates => {
+                                sparkle.check_for_updates();
                             }
                             UiIpcMsg::TogglePeriodicWake => {
                                 cfg.periodic_wake_enabled = !cfg.periodic_wake_enabled;
