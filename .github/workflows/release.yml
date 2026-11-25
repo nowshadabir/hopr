@@ -204,11 +204,8 @@ jobs:
           toolchain: stable
           targets: x86_64-pc-windows-msvc
 
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c
-
       - name: Run unit tests
-        run: cargo test
+        run: cargo test -- --test-threads=1 --nocapture
 
       - name: Build Windows release binary
         run: cargo build --release --target x86_64-pc-windows-msvc

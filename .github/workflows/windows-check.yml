@@ -1,0 +1,22 @@
+name: Windows Check
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install Rust target
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+
+      - name: Run unit tests
+        run: cargo test -- --test-threads=1 --nocapture
