@@ -12,6 +12,7 @@ use uuid::Uuid;
 const TRAY_PNG: &[u8] = include_bytes!("../assets/tray-32.png");
 
 pub struct AppMenuIds {
+    pub check_for_updates: muda::MenuId,
     pub new_account: muda::MenuId,
     pub hibernate_inactive: muda::MenuId,
     pub toggle_mute: muda::MenuId,
@@ -128,6 +129,7 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
     let menu = Menu::new();
 
     let app_menu = Submenu::new("Hopr", true);
+    let check_for_updates = MenuItem::new("Check for Updates…", true, None);
     let open_settings = MenuItem::new(
         "Settings…",
         true,
@@ -140,6 +142,7 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
     );
     let _ = app_menu.append_items(&[
         &PredefinedMenuItem::about(Some("About Hopr"), None),
+        &check_for_updates,
         &PredefinedMenuItem::separator(),
         &open_settings,
         &PredefinedMenuItem::separator(),
@@ -223,6 +226,7 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
     let tray_show = MenuItem::new("Show Hopr", true, None);
 
     let ids = AppMenuIds {
+        check_for_updates: check_for_updates.id().clone(),
         new_account: new_account.id().clone(),
         hibernate_inactive: hibernate_inactive.id().clone(),
         toggle_mute: toggle_mute.id().clone(),

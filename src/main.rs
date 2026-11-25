@@ -2,6 +2,7 @@ mod config;
 mod instance;
 mod macos;
 mod menu;
+mod sparkle;
 mod webview_manager;
 
 use config::{AppConfig, Reminder};
@@ -15,6 +16,7 @@ use menu::{
     AppMenuIds, ContextMenuActionIds, build_app_menu, build_tray_icon, show_account_context_menu,
     sync_tray_menu,
 };
+use sparkle::SparkleUpdater;
 use muda::MenuEvent;
 use serde::{Deserialize, Serialize};
 use std::thread;
@@ -283,6 +285,7 @@ fn main() {
     let (_app_menu, menu_ids) = build_app_menu();
     let tray_icon = build_tray_icon(&menu_ids).ok();
     let notifications = Notifications::init();
+    let sparkle = SparkleUpdater::init();
 
     let mut cfg = AppConfig::load_or_init();
     let mut manager = WebViewManager::new();
@@ -425,7 +428,9 @@ fn main() {
                     continue;
                 }
             }
-            if menu_evt.id == menu_ids.new_account {
+            if menu_evt.id == menu_ids.check_for_updates {
+                sparkle.check_for_updates();
+            } else if menu_evt.id == menu_ids.new_account {
                 let new_id = cfg.add_account().id;
                 cfg.active_account = Some(new_id);
                 let _ = cfg.save();

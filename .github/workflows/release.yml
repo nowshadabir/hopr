@@ -1,0 +1,188 @@
+name: Release Hopr
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      PUBLIC_RELEASE_REPO: nowshadabir/hopr-releases
+      APPCAST_URL: https://nowshadabir.github.io/hopr-releases/appcast.xml
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install Rust targets
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c
+
+      - name: Derive version and build number from tag
+        id: meta
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          SHORT_VER="${TAG#v}"
+          BASE_VER="${SHORT_VER%%-*}"
+          IFS='.' read -r MAJ MIN PAT <<< "$BASE_VER"
+          MAJ="${MAJ:-1}"; MIN="${MIN:-0}"; PAT="${PAT:-0}"
+          BUILD_NUM=$((MAJ * 10000 + MIN * 100 + PAT))
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${SHORT_VER}" >> "$GITHUB_OUTPUT"
+          echo "build=${BUILD_NUM}" >> "$GITHUB_OUTPUT"
+
+      - name: Import Developer ID certificate (if configured)
+        id: cert
+        env:
+          P12_B64: ${{ secrets.DEVELOPER_ID_CERT_P12_BASE64 }}
+          P12_PASS: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          if [[ -z "$P12_B64" || -z "$P12_PASS" ]]; then
+            echo "Developer ID secrets not set; using ad-hoc signing."
+            echo "identity=-" >> "$GITHUB_OUTPUT"
+            echo "has_dev_id=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          KEYCHAIN_PATH="${RUNNER_TEMP}/hopr-build.keychain-db"
+          KEYCHAIN_PASS=$(openssl rand -base64 24)
+          echo "::add-mask::${KEYCHAIN_PASS}"
+          echo "KEYCHAIN_PATH=${KEYCHAIN_PATH}" >> "$GITHUB_ENV"
+
+          security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+
+          P12_FILE="${RUNNER_TEMP}/dev_id.p12"
+          echo "$P12_B64" | base64 --decode > "$P12_FILE"
+          security import "$P12_FILE" -P "$P12_PASS" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          rm -f "$P12_FILE"
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+          if [[ -z "$IDENTITY" ]]; then
+            echo "Developer ID Application identity not found in keychain" >&2
+            exit 1
+          fi
+          echo "identity=${IDENTITY}" >> "$GITHUB_OUTPUT"
+          echo "has_dev_id=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        run: cargo test
+
+      - name: Build universal Hopr.app
+        env:
+          HOPR_UNIVERSAL: "1"
+          HOPR_VERSION: ${{ steps.meta.outputs.version }}
+          HOPR_BUILD_NUMBER: ${{ steps.meta.outputs.build }}
+          HOPR_FEED_URL: ${{ env.APPCAST_URL }}
+          HOPR_SIGN_IDENTITY: ${{ steps.cert.outputs.identity }}
+        run: ./scripts/bundle.sh release
+
+      - name: Package Hopr.dmg
+        env:
+          HOPR_SIGN_IDENTITY: ${{ steps.cert.outputs.identity }}
+        run: ./scripts/package-dmg.sh target/release/Hopr.app "${{ steps.meta.outputs.version }}" target/release
+
+      - name: Notarize and staple (if Apple API key is configured)
+        env:
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [[ "${{ steps.cert.outputs.has_dev_id }}" != "true" || -z "$KEY_ID" || -z "$ISSUER_ID" || -z "$KEY_P8" ]]; then
+            echo "Skipping notarization (Developer ID or App Store Connect API key not configured)."
+            exit 0
+          fi
+
+          P8_FILE="${RUNNER_TEMP}/AuthKey.p8"
+          echo "$KEY_P8" > "$P8_FILE"
+          trap 'rm -f "$P8_FILE"' EXIT
+
+          DMG_PATH="target/release/Hopr-${{ steps.meta.outputs.version }}.dmg"
+          xcrun notarytool submit "$DMG_PATH" \
+            --key "$P8_FILE" \
+            --key-id "$KEY_ID" \
+            --issuer "$ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple target/release/Hopr.app
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate target/release/Hopr.app
+          xcrun stapler validate "$DMG_PATH"
+          spctl --assess --type exec --verbose=2 target/release/Hopr.app
+
+      - name: Sign DMG with Sparkle EdDSA key
+        id: sparkle
+        env:
+          ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          DMG_PATH="target/release/Hopr-${{ steps.meta.outputs.version }}.dmg"
+          KEY_FILE="${RUNNER_TEMP}/sparkle_ed_key"
+          printf '%s' "$ED_KEY" > "$KEY_FILE"
+          trap 'rm -f "$KEY_FILE"' EXIT
+
+          SIG_OUT=$(.sparkle/2.10.1/bin/sign_update -f "$KEY_FILE" "$DMG_PATH")
+          ED_SIG=$(echo "$SIG_OUT" | sed -E 's/.*sparkle:edSignature="([^"]+)".*/\1/')
+          DMG_LEN=$(stat -f%z "$DMG_PATH")
+          if [[ -z "$ED_SIG" ]]; then
+            echo "Failed to extract sparkle:edSignature" >&2
+            exit 1
+          fi
+          echo "ed_signature=${ED_SIG}" >> "$GITHUB_OUTPUT"
+          echo "length=${DMG_LEN}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release and update appcast.xml
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN || github.token }}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          VER="${{ steps.meta.outputs.version }}"
+          DMG_PATH="target/release/Hopr-${VER}.dmg"
+          NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
+          git tag -l --format='%(contents)' "$TAG" > "$NOTES_FILE" || true
+          if [[ ! -s "$NOTES_FILE" ]]; then
+            cp CHANGELOG.md "$NOTES_FILE"
+          fi
+
+          gh release create "$TAG" "$DMG_PATH" \
+            --repo "$PUBLIC_RELEASE_REPO" \
+            --title "Hopr ${VER}" \
+            --notes-file "$NOTES_FILE"
+
+          PAGES_DIR="${RUNNER_TEMP}/hopr-pages"
+          git clone --branch gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${PUBLIC_RELEASE_REPO}.git" "$PAGES_DIR"
+          python3 scripts/update-appcast.py \
+            --appcast "${PAGES_DIR}/appcast.xml" \
+            --version "$VER" \
+            --build "${{ steps.meta.outputs.build }}" \
+            --min-os "14.0" \
+            --url "https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG}/Hopr-${VER}.dmg" \
+            --ed-signature "${{ steps.sparkle.outputs.ed_signature }}" \
+            --length "${{ steps.sparkle.outputs.length }}" \
+            --release-notes-url "https://github.com/${PUBLIC_RELEASE_REPO}/releases/tag/${TAG}"
+
+          cd "$PAGES_DIR"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "chore(appcast): release ${TAG}"
+          git push origin gh-pages
+
+      - name: Clean up temporary keychain
+        if: always()
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" && -f "${KEYCHAIN_PATH}" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
