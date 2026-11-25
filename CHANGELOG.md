@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.4.5
+
+- Fix Windows CI release pipeline (`cargo test --release`) so `Hopr-1.4.5-win-x64.exe` and `Hopr-1.4.5-Setup.exe` build and publish alongside `Hopr-1.4.5.dmg`.
+- Includes all v1.4.4 fixes (window dragging, account reordering, inline Remove confirmation, and Windows icon planes).
+
 ## v1.4.4
 
 - Fix window dragging on macOS from sidebar, settings, and lock screen areas.
