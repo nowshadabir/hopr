@@ -992,16 +992,58 @@
         }
 
         if (accounts.length > 1) {
+          const idx = accounts.indexOf(acct);
+          const upBtn = document.createElement("button");
+          upBtn.className = "btn-outline";
+          upBtn.type = "button";
+          upBtn.textContent = "↑";
+          upBtn.title = "Move account up";
+          upBtn.disabled = idx === 0;
+          upBtn.addEventListener("click", () => post({ type: "move_account", id: acct.id, delta: -1 }));
+          headActions.appendChild(upBtn);
+
+          const downBtn = document.createElement("button");
+          downBtn.className = "btn-outline";
+          downBtn.type = "button";
+          downBtn.textContent = "↓";
+          downBtn.title = "Move account down";
+          downBtn.disabled = idx === accounts.length - 1;
+          downBtn.addEventListener("click", () => post({ type: "move_account", id: acct.id, delta: 1 }));
+          headActions.appendChild(downBtn);
+
           const removeBtn = document.createElement("button");
           removeBtn.className = "btn-outline danger";
           removeBtn.type = "button";
           removeBtn.textContent = "Remove";
           removeBtn.addEventListener("click", () => {
-            if (confirm(`Remove "${acct.name}"? This will delete its local session and cached avatar on this Mac.`)) {
-              post({ type: "remove_account", id: acct.id });
-            }
+            removeBtn.hidden = true;
+            confirmBtn.hidden = false;
+            cancelRemoveBtn.hidden = false;
           });
+
+          const confirmBtn = document.createElement("button");
+          confirmBtn.className = "btn-outline danger";
+          confirmBtn.type = "button";
+          confirmBtn.textContent = "Confirm remove";
+          confirmBtn.hidden = true;
+          confirmBtn.addEventListener("click", () => {
+            post({ type: "remove_account", id: acct.id });
+          });
+
+          const cancelRemoveBtn = document.createElement("button");
+          cancelRemoveBtn.className = "btn-outline";
+          cancelRemoveBtn.type = "button";
+          cancelRemoveBtn.textContent = "Cancel";
+          cancelRemoveBtn.hidden = true;
+          cancelRemoveBtn.addEventListener("click", () => {
+            confirmBtn.hidden = true;
+            cancelRemoveBtn.hidden = true;
+            removeBtn.hidden = false;
+          });
+
           headActions.appendChild(removeBtn);
+          headActions.appendChild(confirmBtn);
+          headActions.appendChild(cancelRemoveBtn);
         }
 
         head.appendChild(ident);
@@ -1186,6 +1228,12 @@
     });
 
     post({ type: "settings_ready" });
+
+    document.querySelector(".shell").addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest("button, a, input, select, textarea, label, .card, .nav-item")) return;
+      post({ type: "drag_window" });
+    });
   </script>
 </body>
 </html>

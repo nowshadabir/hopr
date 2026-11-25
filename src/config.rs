@@ -512,6 +512,46 @@ impl AppConfig {
         false
     }
 
+    pub fn move_account(&mut self, id: Uuid, delta: isize) -> bool {
+        let Some(idx) = self.accounts.iter().position(|a| a.id == id) else {
+            return false;
+        };
+        if self.accounts.len() <= 1 || delta == 0 {
+            return false;
+        }
+        let max_idx = (self.accounts.len() - 1) as isize;
+        let new_idx = (idx as isize + delta).clamp(0, max_idx) as usize;
+        if new_idx == idx {
+            return false;
+        }
+        let acct = self.accounts.remove(idx);
+        self.accounts.insert(new_idx, acct);
+        for (i, acct) in self.accounts.iter_mut().enumerate() {
+            acct.order = i;
+        }
+        let _ = self.save();
+        true
+    }
+
+    pub fn reorder_account(&mut self, id: Uuid, target_id: Uuid) -> bool {
+        if id == target_id {
+            return false;
+        }
+        let Some(from_idx) = self.accounts.iter().position(|a| a.id == id) else {
+            return false;
+        };
+        let Some(to_idx) = self.accounts.iter().position(|a| a.id == target_id) else {
+            return false;
+        };
+        let acct = self.accounts.remove(from_idx);
+        self.accounts.insert(to_idx, acct);
+        for (i, acct) in self.accounts.iter_mut().enumerate() {
+            acct.order = i;
+        }
+        let _ = self.save();
+        true
+    }
+
     pub fn update_profile(
         &mut self,
         id: Uuid,
@@ -593,6 +633,29 @@ mod tests {
         cfg.clear_lock_pin();
         assert!(!cfg.has_lock_pin());
         assert!(!cfg.verify_lock_pin("2580"));
+    }
+
+    #[test]
+    fn move_and_reorder_accounts() {
+        let mut cfg = AppConfig::default();
+        let a1 = cfg.add_account().id;
+        let a2 = cfg.add_account().id;
+        let a3 = cfg.add_account().id;
+
+        assert!(!cfg.move_account(a1, -1));
+        assert!(cfg.move_account(a3, -1));
+        assert_eq!(
+            cfg.accounts.iter().map(|a| a.id).collect::<Vec<_>>(),
+            vec![a1, a3, a2]
+        );
+        assert!(cfg.reorder_account(a2, a1));
+        assert_eq!(
+            cfg.accounts.iter().map(|a| a.id).collect::<Vec<_>>(),
+            vec![a2, a1, a3]
+        );
+        for (i, acct) in cfg.accounts.iter().enumerate() {
+            assert_eq!(acct.order, i);
+        }
     }
 }
 

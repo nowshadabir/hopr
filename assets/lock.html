@@ -231,6 +231,12 @@
     };
 
     post({ type: "lock_ready" });
+
+    document.body.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest(".lock-card, button, input, a")) return;
+      post({ type: "drag_window" });
+    });
   </script>
 </body>
 </html>

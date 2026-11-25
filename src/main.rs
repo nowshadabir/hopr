@@ -78,6 +78,9 @@ enum UiIpcMsg {
     ToggleGroup { group: String },
     AddAccount,
     RemoveAccount { id: Uuid },
+    MoveAccount { id: Uuid, delta: isize },
+    ReorderAccount { id: Uuid, target_id: Uuid },
+    DragWindow,
     SetKeepConnected { id: Uuid, keep_connected: bool },
     RenameAccount { id: Uuid, name: String },
     CycleNotifSound { id: Uuid },
@@ -1302,6 +1305,35 @@ fn main() {
                                         settings_open,
                                     );
                                 }
+                            }
+                            UiIpcMsg::MoveAccount { id, delta } => {
+                                if cfg.move_account(id, delta) {
+                                    sync_ui(
+                                        &sidebar,
+                                        settings_wv.as_ref(),
+                                        &menu_ids,
+                                        tray_icon.as_ref(),
+                                        &cfg,
+                                        &manager,
+                                        settings_open,
+                                    );
+                                }
+                            }
+                            UiIpcMsg::ReorderAccount { id, target_id } => {
+                                if cfg.reorder_account(id, target_id) {
+                                    sync_ui(
+                                        &sidebar,
+                                        settings_wv.as_ref(),
+                                        &menu_ids,
+                                        tray_icon.as_ref(),
+                                        &cfg,
+                                        &manager,
+                                        settings_open,
+                                    );
+                                }
+                            }
+                            UiIpcMsg::DragWindow => {
+                                let _ = window.drag_window();
                             }
                             UiIpcMsg::SetKeepConnected { id, keep_connected } => {
                                 cfg.set_keep_connected(id, keep_connected);

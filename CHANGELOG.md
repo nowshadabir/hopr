@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.4.4
+
+- Fix window dragging on macOS from sidebar, settings, and lock screen areas.
+- Add account reordering (drag-and-drop in sidebar, up/down buttons in Settings).
+- Fix Settings account Remove button using inline confirmation instead of `window.confirm()`.
+- Fix `assets/hopr.ico` icon planes for Windows resource compilation.
+
 ## v1.4.2
 
 - Fix NSIS path in Windows CI workflow to package `Hopr-1.4.2-Setup.exe` alongside `Hopr-1.4.2-win-x64.exe` and `Hopr-1.4.2.dmg`.
