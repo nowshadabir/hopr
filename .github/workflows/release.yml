@@ -172,7 +172,7 @@ jobs:
             --url "https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG}/Hopr-${VER}.dmg" \
             --ed-signature "${{ steps.sparkle.outputs.ed_signature }}" \
             --length "${{ steps.sparkle.outputs.length }}" \
-            --release-notes-url "https://github.com/${PUBLIC_RELEASE_REPO}/releases/tag/${TAG}"
+            --notes-file "$NOTES_FILE"
 
           cd "$PAGES_DIR"
           git config user.name "github-actions[bot]"
@@ -187,3 +187,73 @@ jobs:
           if [[ -n "${KEYCHAIN_PATH:-}" && -f "${KEYCHAIN_PATH}" ]]; then
             security delete-keychain "$KEYCHAIN_PATH" || true
           fi
+
+  release-windows:
+    needs: release
+    runs-on: windows-latest
+    env:
+      PUBLIC_RELEASE_REPO: nowshadabir/hopr-releases
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install Rust target
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c
+
+      - name: Run unit tests
+        run: cargo test
+
+      - name: Build Windows release binary
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Package portable EXE and NSIS Setup EXE
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $ver = $tag.TrimStart('v')
+          $exeSrc = "target\x86_64-pc-windows-msvc\release\hopr.exe"
+          $portable = "target\Hopr-$ver-win-x64.exe"
+          Copy-Item $exeSrc $portable
+
+          $nsi = @"
+          !include "MUI2.nsh"
+          Name "Hopr $ver"
+          OutFile "target\Hopr-$ver-Setup.exe"
+          InstallDir "`$LOCALAPPDATA\Programs\Hopr"
+          RequestExecutionLevel user
+          !insertmacro MUI_PAGE_DIRECTORY
+          !insertmacro MUI_PAGE_INSTFILES
+          !insertmacro MUI_LANGUAGE "English"
+          Section "Install"
+            SetOutPath "`$INSTDIR"
+            File "/oname=Hopr.exe" "$exeSrc"
+            CreateDirectory "`$SMPROGRAMS\Hopr"
+            CreateShortCut "`$SMPROGRAMS\Hopr\Hopr.lnk" "`$INSTDIR\Hopr.exe"
+            WriteUninstaller "`$INSTDIR\Uninstall.exe"
+          SectionEnd
+          Section "Uninstall"
+            Delete "`$INSTDIR\Hopr.exe"
+            Delete "`$INSTDIR\Uninstall.exe"
+            Delete "`$SMPROGRAMS\Hopr\Hopr.lnk"
+            RMDir "`$SMPROGRAMS\Hopr"
+            RMDir "`$INSTDIR"
+          SectionEnd
+          "@
+          Set-Content -Path "installer.nsi" -Value $nsi
+          makensis installer.nsi
+
+      - name: Upload Windows assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN || github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $ver = $tag.TrimStart('v')
+          gh release upload $tag "target/Hopr-$ver-win-x64.exe" "target/Hopr-$ver-Setup.exe" --repo $env:PUBLIC_RELEASE_REPO --clobber
+        shell: pwsh

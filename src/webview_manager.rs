@@ -1,7 +1,8 @@
 use crate::config::{AccountConfig, AppConfig};
-use crate::macos::{downloads_dir, is_low_power_mode, open_external_url};
-use serde::Serialize;
+use crate::platform::{downloads_dir, is_low_power_mode, open_external_url};
+#[cfg(target_os = "macos")]
 use objc2::rc::Weak;
+use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::Arc;
@@ -10,7 +11,10 @@ use std::time::{Duration, Instant};
 use tao::event_loop::EventLoopProxy;
 use tao::window::Window;
 use uuid::Uuid;
+#[cfg(target_os = "macos")]
 use wry::{Rect, WebView, WebViewBuilder, WebViewBuilderExtDarwin, WebViewExtMacOS};
+#[cfg(not(target_os = "macos"))]
+use wry::{Rect, WebContext, WebView, WebViewBuilder};
 
 const WHATSAPP_URL: &str = "https://web.whatsapp.com";
 const SAFARI_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
@@ -73,6 +77,8 @@ impl RateLimiter {
 
 pub struct AccountRuntime {
     pub webview: Option<WebView>,
+    #[cfg(not(target_os = "macos"))]
+    pub web_context: Option<WebContext>,
     pub lifecycle: LifecycleState,
     pub unread: u32,
     pub connection_state: String,
@@ -94,6 +100,8 @@ impl Default for AccountRuntime {
         let now = Instant::now();
         Self {
             webview: None,
+            #[cfg(not(target_os = "macos"))]
+            web_context: None,
             lifecycle: LifecycleState::Hibernated,
             unread: 0,
             connection_state: "hibernated".to_string(),
@@ -469,9 +477,22 @@ impl WebViewManager {
             }
         };
 
-        let webview = WebViewBuilder::new()
+        #[cfg(target_os = "macos")]
+        let builder = WebViewBuilder::new().with_data_store_identifier(acct.uuid_bytes());
+        #[cfg(not(target_os = "macos"))]
+        let builder = {
+            let profile_dir = AppConfig::app_support_dir()
+                .join("profiles")
+                .join(acct.id.to_string());
+            let _ = AppConfig::ensure_secure_dir(&profile_dir);
+            let ctx = rt
+                .web_context
+                .get_or_insert_with(|| WebContext::new(Some(profile_dir)));
+            WebViewBuilder::new_with_web_context(ctx)
+        };
+
+        let webview = builder
             .with_url(&target_url)
-            .with_data_store_identifier(acct.uuid_bytes())
             .with_user_agent(SAFARI_UA)
             .with_devtools(cfg!(debug_assertions))
             .with_initialization_script(INJECT_JS)
@@ -778,39 +799,48 @@ fn debug_hibernate_duration(cfg: &AppConfig) -> Option<Duration> {
 }
 
 pub fn teardown_webview(wv: WebView, label: &str) {
-    let wk = wv.webview();
-    let mgr = wv.manager();
-    let weak_wk = Weak::from_retained(&wk);
+    #[cfg(target_os = "macos")]
+    {
+        let wk = wv.webview();
+        let mgr = wv.manager();
+        let weak_wk = Weak::from_retained(&wk);
 
-    let wk_rc_before: usize = unsafe { objc2::msg_send![&*wk, retainCount] };
-    let mgr_rc_before: usize = unsafe { objc2::msg_send![&*mgr, retainCount] };
+        let wk_rc_before: usize = unsafe { objc2::msg_send![&*wk, retainCount] };
+        let mgr_rc_before: usize = unsafe { objc2::msg_send![&*mgr, retainCount] };
 
-    unsafe {
-        wk.stopLoading();
+        unsafe {
+            wk.stopLoading();
+        }
+        let _ = wv.load_url("about:blank");
+
+        unsafe {
+            mgr.removeAllScriptMessageHandlers();
+            mgr.removeAllUserScripts();
+            wk.setNavigationDelegate(None);
+            wk.setUIDelegate(None);
+            wk.removeFromSuperview();
+        }
+
+        drop(mgr);
+        drop(wk);
+        drop(wv);
+
+        let after_alive = weak_wk.load();
+        let wk_rc_after = after_alive
+            .as_ref()
+            .map(|obj| unsafe { objc2::msg_send![&**obj, retainCount] })
+            .unwrap_or(0usize);
+        eprintln!(
+            "[teardown] label={label} wk_rc_before={wk_rc_before} mgr_rc_before={mgr_rc_before} wk_alive_after_drop={} wk_rc_after={wk_rc_after}",
+            after_alive.is_some()
+        );
     }
-    let _ = wv.load_url("about:blank");
-
-    unsafe {
-        mgr.removeAllScriptMessageHandlers();
-        mgr.removeAllUserScripts();
-        wk.setNavigationDelegate(None);
-        wk.setUIDelegate(None);
-        wk.removeFromSuperview();
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = wv.load_url("about:blank");
+        drop(wv);
+        eprintln!("[teardown] label={label}");
     }
-
-    drop(mgr);
-    drop(wk);
-    drop(wv);
-
-    let after_alive = weak_wk.load();
-    let wk_rc_after = after_alive
-        .as_ref()
-        .map(|obj| unsafe { objc2::msg_send![&**obj, retainCount] })
-        .unwrap_or(0usize);
-    eprintln!(
-        "[teardown] label={label} wk_rc_before={wk_rc_before} mgr_rc_before={mgr_rc_before} wk_alive_after_drop={} wk_rc_after={wk_rc_after}",
-        after_alive.is_some()
-    );
 }
 
 pub fn is_trusted_ipc_origin(origin: &str) -> bool {

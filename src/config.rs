@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -226,10 +227,20 @@ impl AppConfig {
         {
             return PathBuf::from(dir);
         }
-        if let Some(home) = std::env::var_os("HOME") {
-            PathBuf::from(home).join("Library/Application Support/Hopr")
-        } else {
-            PathBuf::from("Hopr")
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(appdata) = std::env::var_os("LOCALAPPDATA").or_else(|| std::env::var_os("APPDATA")) {
+                return PathBuf::from(appdata).join("Hopr");
+            }
+            return PathBuf::from("Hopr");
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Some(home) = std::env::var_os("HOME") {
+                PathBuf::from(home).join("Library/Application Support/Hopr")
+            } else {
+                PathBuf::from("Hopr")
+            }
         }
     }
 
@@ -243,7 +254,9 @@ impl AppConfig {
 
     pub fn ensure_secure_dir(path: &Path) -> Result<(), String> {
         fs::create_dir_all(path).map_err(|e| e.to_string())?;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())
+        #[cfg(unix)]
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     pub fn write_secure_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -251,7 +264,9 @@ impl AppConfig {
             Self::ensure_secure_dir(parent)?;
         }
         fs::write(path, bytes).map_err(|e| e.to_string())?;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())
+        #[cfg(unix)]
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     pub fn load_or_init() -> Self {

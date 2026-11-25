@@ -3,7 +3,10 @@ use muda::accelerator::{Accelerator, Code, Modifiers};
 use muda::{ContextMenu, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use std::io::Cursor;
 use tao::dpi::LogicalPosition;
+#[cfg(target_os = "macos")]
 use tao::platform::macos::WindowExtMacOS;
+#[cfg(target_os = "windows")]
+use tao::platform::windows::WindowExtWindows;
 use tao::window::Window;
 use tray_icon::menu::Menu as TrayMenu;
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
@@ -115,12 +118,25 @@ pub fn show_account_context_menu(
         sleep_account: sleep_account.id().clone(),
     };
 
-    let ns_view = window.ns_view();
-    unsafe {
-        let _ = menu.show_context_menu_for_nsview(
-            ns_view,
-            Some(muda::dpi::Position::Logical(LogicalPosition::new(x, y))),
-        );
+    #[cfg(target_os = "macos")]
+    {
+        let ns_view = window.ns_view();
+        unsafe {
+            let _ = menu.show_context_menu_for_nsview(
+                ns_view,
+                Some(muda::dpi::Position::Logical(LogicalPosition::new(x, y))),
+            );
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let hwnd = window.hwnd();
+        unsafe {
+            let _ = menu.show_context_menu_for_hwnd(
+                hwnd,
+                Some(muda::dpi::Position::Logical(LogicalPosition::new(x, y))),
+            );
+        }
     }
     ids
 }
@@ -237,6 +253,7 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
         tray_quit: quit_item.id().clone(),
     };
 
+    #[cfg(target_os = "macos")]
     menu.init_for_nsapp();
     (menu, ids)
 }

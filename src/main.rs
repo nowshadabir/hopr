@@ -1,30 +1,39 @@
+#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
+
 mod config;
 mod instance;
+#[cfg(target_os = "macos")]
 mod macos;
 mod menu;
+mod platform;
 mod sparkle;
 mod webview_manager;
+#[cfg(target_os = "windows")]
+mod windows;
 
 use config::{AppConfig, Reminder};
 use instance::{acquire_single_instance, spawn_instance_listener};
-use macos::{
-    Notifications, authenticate_touch_id, hide_application, pick_image_data_url, preview_sound,
-    pump_runloop_for_flush, remove_data_store_for_account, set_dock_badge, set_launch_at_login,
-    unhide_and_activate_application,
-};
 use menu::{
     AppMenuIds, ContextMenuActionIds, build_app_menu, build_tray_icon, show_account_context_menu,
     sync_tray_menu,
 };
-use sparkle::SparkleUpdater;
 use muda::MenuEvent;
+use platform::{
+    Notifications, authenticate_touch_id, hide_application, pick_image_data_url, preview_sound,
+    pump_runloop_for_flush, remove_data_store_for_account, set_dock_badge, set_launch_at_login,
+    unhide_and_activate_application,
+};
 use serde::{Deserialize, Serialize};
+use sparkle::SparkleUpdater;
 use std::thread;
 use std::time::Duration;
 use tao::dpi::{LogicalPosition, LogicalSize};
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
+#[cfg(target_os = "macos")]
 use tao::platform::macos::WindowBuilderExtMacOS;
+#[cfg(target_os = "windows")]
+use tao::platform::windows::WindowExtWindows;
 use tao::window::{Window, WindowBuilder};
 use tray_icon::{TrayIcon, TrayIconEvent};
 use uuid::Uuid;
@@ -296,18 +305,26 @@ fn main() {
     let proxy = event_loop.create_proxy();
     spawn_instance_listener(instance_listener, proxy.clone());
 
-    let window = WindowBuilder::new()
+    let builder = WindowBuilder::new()
         .with_title("Hopr")
-        .with_titlebar_transparent(true)
-        .with_fullsize_content_view(true)
-        .with_title_hidden(true)
         .with_visible(!start_hidden)
         .with_inner_size(LogicalSize::new(1240.0, 820.0))
-        .with_min_inner_size(LogicalSize::new(740.0, 500.0))
+        .with_min_inner_size(LogicalSize::new(740.0, 500.0));
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .with_titlebar_transparent(true)
+        .with_fullsize_content_view(true)
+        .with_title_hidden(true);
+    let window = builder
         .build(&event_loop)
         .expect("Failed to create main window");
 
-    let (_app_menu, menu_ids) = build_app_menu();
+    let (app_menu, menu_ids) = build_app_menu();
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let _ = app_menu.init_for_hwnd(window.hwnd());
+    }
+    let _ = &app_menu;
     let tray_icon = build_tray_icon(&menu_ids).ok();
     let notifications = Notifications::init();
     let sparkle = SparkleUpdater::init();
