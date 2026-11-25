@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.2
+
+- Fix NSIS path in Windows CI workflow to package `Hopr-1.4.2-Setup.exe` alongside `Hopr-1.4.2-win-x64.exe` and `Hopr-1.4.2.dmg`.
+
 ## v1.4.1
 
 - Fix Windows CI compilation (`Win32_Security` feature and Unix-only permissions test guard) so `Hopr-1.4.1-win-x64.exe` and `Hopr-1.4.1-Setup.exe` build alongside `Hopr-1.4.1.dmg`.

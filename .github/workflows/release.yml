@@ -247,7 +247,15 @@ jobs:
           SectionEnd
           "@
           Set-Content -Path "installer.nsi" -Value $nsi
-          makensis installer.nsi
+          $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) {
+            choco install nsis -y --no-progress | Out-Null
+          }
+          if (Test-Path $makensis) {
+            & $makensis installer.nsi
+          } else {
+            makensis installer.nsi
+          }
 
       - name: Upload Windows assets to GitHub Release
         env:
