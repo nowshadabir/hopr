@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.1
+
+- Fix Windows CI compilation (`Win32_Security` feature and Unix-only permissions test guard) so `Hopr-1.4.1-win-x64.exe` and `Hopr-1.4.1-Setup.exe` build alongside `Hopr-1.4.1.dmg`.
+
 ## v1.4.0
 
 - Custom branded HTML release notes in the Sparkle auto-updater UI.

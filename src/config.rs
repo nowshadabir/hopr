@@ -520,6 +520,7 @@ impl AppConfig {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn secure_file_permissions_are_0700_and_0600() {
         let base = std::env::temp_dir().join(format!("hopr-perm-test-{}", Uuid::new_v4()));
