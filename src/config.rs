@@ -622,17 +622,25 @@ mod tests {
 
     #[test]
     fn lock_pin_set_verify_and_clear() {
+        eprintln!("PIN test: create config");
         let mut cfg = AppConfig::default();
+        eprintln!("PIN test: check empty state");
         assert!(!cfg.has_lock_pin());
         assert!(!cfg.verify_lock_pin("1234"));
+        eprintln!("PIN test: reject short PIN");
         assert!(cfg.set_lock_pin("12").is_err());
+        eprintln!("PIN test: set valid PIN");
         assert!(cfg.set_lock_pin("2580").is_ok());
+        eprintln!("PIN test: verify valid PIN");
         assert!(cfg.has_lock_pin());
         assert!(cfg.verify_lock_pin("2580"));
         assert!(!cfg.verify_lock_pin("0000"));
+        eprintln!("PIN test: clear PIN");
         cfg.clear_lock_pin();
+        eprintln!("PIN test: verify cleared PIN");
         assert!(!cfg.has_lock_pin());
         assert!(!cfg.verify_lock_pin("2580"));
+        eprintln!("PIN test: complete");
     }
 
     #[test]
