@@ -629,17 +629,29 @@ mod tests {
 
     #[test]
     fn lock_pin_set_verify_and_clear() {
+        eprintln!("[pin_test] 1: default");
         let mut cfg = AppConfig::default();
+        eprintln!("[pin_test] 2: has_lock_pin");
         assert!(!cfg.has_lock_pin());
+        eprintln!("[pin_test] 3: verify 1234");
         assert!(!cfg.verify_lock_pin("1234"));
+        eprintln!("[pin_test] 4: set 12");
         assert!(cfg.set_lock_pin("12").is_err());
+        eprintln!("[pin_test] 5: set 2580");
         assert!(cfg.set_lock_pin("2580").is_ok());
+        eprintln!("[pin_test] 6: has_lock_pin");
         assert!(cfg.has_lock_pin());
+        eprintln!("[pin_test] 7: verify 2580");
         assert!(cfg.verify_lock_pin("2580"));
+        eprintln!("[pin_test] 8: verify 0000");
         assert!(!cfg.verify_lock_pin("0000"));
+        eprintln!("[pin_test] 9: clear");
         cfg.clear_lock_pin();
+        eprintln!("[pin_test] 10: has_lock_pin");
         assert!(!cfg.has_lock_pin());
+        eprintln!("[pin_test] 11: verify 2580");
         assert!(!cfg.verify_lock_pin("2580"));
+        eprintln!("[pin_test] 12: done");
     }
 
     #[test]
