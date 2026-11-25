@@ -36,7 +36,7 @@ if [[ -f "logo.png" ]]; then
   iconutil -c icns "$ICONSET_DIR" -o "${APP_DIR}/Contents/Resources/AppIcon.icns"
 fi
 
-# Ad-hoc sign so UNUserNotificationCenter and WKWebsiteDataStore work locally
-codesign --force --deep --sign - "$APP_DIR"
+# Sign with Hardened Runtime + network.client entitlement (ad-hoc for local builds)
+codesign --force --deep --options runtime --entitlements "macos/Hopr.entitlements" --sign - "$APP_DIR"
 
 echo "Built ${APP_DIR}"

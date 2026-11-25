@@ -10,6 +10,33 @@
     } catch (_) {}
   };
 
+  // Inject subtle native macOS CSS polish into WhatsApp Web
+  const injectNativeCss = () => {
+    if (document.getElementById("hopr-native-css")) return;
+    const style = document.createElement("style");
+    style.id = "hopr-native-css";
+    style.textContent = `
+      html, body, #app {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif !important;
+        -webkit-font-smoothing: antialiased;
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(128, 128, 128, 0.35);
+        border-radius: 3px;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  };
+  if (document.head || document.documentElement) {
+    injectNativeCss();
+  } else {
+    document.addEventListener("DOMContentLoaded", injectNativeCss, { once: true });
+  }
+
   // 1. Override Web Notifications -> native macOS notifications via Rust IPC
   class NativeNotification {
     static permission = "granted";
@@ -21,9 +48,9 @@
     }
 
     constructor(title, options = {}) {
-      this.title = String(title || "WhatsApp");
-      this.body = String(options.body || "");
-      this.tag = String(options.tag || "");
+      this.title = String(title || "WhatsApp").slice(0, 200);
+      this.body = String(options.body || "").slice(0, 500);
+      this.tag = String(options.tag || "").slice(0, 100);
       this.onclick = null;
       this.onclose = null;
       this.onerror = null;
@@ -82,9 +109,34 @@
     headObserver.observe(document.documentElement, { childList: true, subtree: true });
   }
 
-  // 3. Report connection state (loading | qr | ready) and sync profile avatar/name
+  // 3. Report network reachability events (no polling)
+  window.addEventListener("online", () => post({ type: "network", online: true }));
+  window.addEventListener("offline", () => post({ type: "network", online: false }));
+  if (!navigator.onLine) {
+    post({ type: "network", online: false });
+  }
+
+  // 4. Report connection state (loading | qr | ready) and sync user's own profile avatar/name
   let lastStatus = "";
   let lastProfileKey = "";
+
+  const findOwnProfileImg = () => {
+    const selectors = [
+      "[data-testid='menu-bar-user-avatar'] img[src]",
+      "header button[aria-label*='Profile' i] img[src]",
+      "header [role='button'][aria-label*='Profile' i] img[src]",
+      "nav button[aria-label*='Profile' i] img[src]",
+      "header img[src*='pps.whatsapp.net']",
+      "nav img[src*='pps.whatsapp.net']",
+    ];
+    for (const sel of selectors) {
+      const img = document.querySelector(sel);
+      if (img && img.src && !img.src.includes("meta") && !img.src.includes("ai")) {
+        return img;
+      }
+    }
+    return null;
+  };
 
   const tryExtractProfile = () => {
     try {
@@ -92,18 +144,18 @@
       let displayName = null;
       let phone = null;
 
-      const headerImg = document.querySelector("#app header img[src]");
-      if (headerImg && headerImg.complete && headerImg.naturalWidth > 0) {
+      const profileImg = findOwnProfileImg();
+      if (profileImg && profileImg.complete && profileImg.naturalWidth > 0) {
         try {
           const canvas = document.createElement("canvas");
           canvas.width = 64;
           canvas.height = 64;
           const ctx = canvas.getContext("2d");
-          ctx.drawImage(headerImg, 0, 0, 64, 64);
-          avatarUrl = canvas.toDataURL("image/png");
+          ctx.drawImage(profileImg, 0, 0, 64, 64);
+          avatarUrl = canvas.toDataURL("image/jpeg", 0.85);
         } catch (_) {
-          if (headerImg.src && headerImg.src.startsWith("http")) {
-            avatarUrl = headerImg.src;
+          if (profileImg.src && profileImg.src.startsWith("https://")) {
+            avatarUrl = profileImg.src;
           }
         }
       }
@@ -147,7 +199,7 @@
     }
   };
 
-  setInterval(checkStatus, 2500);
+  setInterval(checkStatus, 3000);
   if (document.readyState === "complete") {
     checkStatus();
   } else {

@@ -1,8 +1,13 @@
+use crate::config::AccountConfig;
 use muda::accelerator::{Accelerator, Code, Modifiers};
-use muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use muda::{ContextMenu, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use std::io::Cursor;
+use tao::dpi::LogicalPosition;
+use tao::platform::macos::WindowExtMacOS;
+use tao::window::Window;
 use tray_icon::menu::Menu as TrayMenu;
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
+use uuid::Uuid;
 
 const TRAY_PNG: &[u8] = include_bytes!("../assets/tray-32.png");
 
@@ -12,8 +17,111 @@ pub struct AppMenuIds {
     pub toggle_mute: muda::MenuId,
     pub open_settings: muda::MenuId,
     pub switch_accounts: Vec<muda::MenuId>,
+    pub switch_account_items: Vec<MenuItem>,
     pub tray_show: muda::MenuId,
     pub tray_quit: muda::MenuId,
+}
+
+impl AppMenuIds {
+    pub fn sync_account_menu(&self, accounts: &[AccountConfig]) {
+        for (idx, item) in self.switch_account_items.iter().enumerate() {
+            if let Some(acct) = accounts.get(idx) {
+                item.set_text(format!("{} ({})", acct.effective_name(), acct.label));
+                item.set_enabled(true);
+            } else {
+                item.set_text(format!("Account {} (Empty)", idx + 1));
+                item.set_enabled(false);
+            }
+        }
+    }
+}
+
+pub fn sync_tray_menu(
+    tray: Option<&TrayIcon>,
+    ids: &AppMenuIds,
+    accounts: &[(Uuid, String, u32)],
+) {
+    let Some(tray) = tray else {
+        return;
+    };
+    let tray_menu = TrayMenu::new();
+    let show_item = MenuItem::with_id(ids.tray_show.clone(), "Open Hopr", true, None);
+    let _ = tray_menu.append(&show_item);
+    let _ = tray_menu.append(&PredefinedMenuItem::separator());
+
+    for (idx, (_, name, unread)) in accounts.iter().take(9).enumerate() {
+        let title = if *unread > 0 {
+            format!("{name} ({unread})")
+        } else {
+            name.clone()
+        };
+        if let Some(menu_id) = ids.switch_accounts.get(idx) {
+            let item = MenuItem::with_id(menu_id.clone(), title, true, None);
+            let _ = tray_menu.append(&item);
+        }
+    }
+
+    let _ = tray_menu.append(&PredefinedMenuItem::separator());
+    let quit_item = MenuItem::with_id(ids.tray_quit.clone(), "Quit Hopr", true, None);
+    let _ = tray_menu.append(&quit_item);
+    tray.set_menu(Some(Box::new(tray_menu)));
+}
+
+pub struct ContextMenuActionIds {
+    pub account_id: Uuid,
+    pub toggle_lock: muda::MenuId,
+    pub toggle_pin: muda::MenuId,
+    pub add_reminder: muda::MenuId,
+    pub sleep_account: muda::MenuId,
+}
+
+pub fn show_account_context_menu(
+    window: &Window,
+    acct: &AccountConfig,
+    x: f64,
+    y: f64,
+) -> ContextMenuActionIds {
+    let menu = Menu::new();
+    let lock_label = if acct.locked {
+        "Unlock Account (Touch ID)"
+    } else {
+        "Lock Account (Touch ID)"
+    };
+    let pin_label = if acct.keep_connected {
+        "Unpin Account"
+    } else {
+        "Pin Account (Always Connected)"
+    };
+
+    let toggle_lock = MenuItem::new(lock_label, true, None);
+    let toggle_pin = MenuItem::new(pin_label, true, None);
+    let add_reminder = MenuItem::new("Add Reminder…", true, None);
+    let sleep_account = MenuItem::new("Sleep Now", !acct.keep_connected, None);
+
+    let _ = menu.append_items(&[
+        &toggle_lock,
+        &toggle_pin,
+        &add_reminder,
+        &PredefinedMenuItem::separator(),
+        &sleep_account,
+    ]);
+
+    let ids = ContextMenuActionIds {
+        account_id: acct.id,
+        toggle_lock: toggle_lock.id().clone(),
+        toggle_pin: toggle_pin.id().clone(),
+        add_reminder: add_reminder.id().clone(),
+        sleep_account: sleep_account.id().clone(),
+    };
+
+    let ns_view = window.ns_view();
+    unsafe {
+        let _ = menu.show_context_menu_for_nsview(
+            ns_view,
+            Some(muda::dpi::Position::Logical(LogicalPosition::new(x, y))),
+        );
+    }
+    ids
 }
 
 pub fn build_app_menu() -> (Menu, AppMenuIds) {
@@ -25,6 +133,11 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
         true,
         Some(Accelerator::new(Some(Modifiers::SUPER), Code::Comma)),
     );
+    let quit_item = MenuItem::new(
+        "Quit Hopr",
+        true,
+        Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyQ)),
+    );
     let _ = app_menu.append_items(&[
         &PredefinedMenuItem::about(Some("About Hopr"), None),
         &PredefinedMenuItem::separator(),
@@ -34,7 +147,7 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
         &PredefinedMenuItem::hide_others(None),
         &PredefinedMenuItem::show_all(None),
         &PredefinedMenuItem::separator(),
-        &PredefinedMenuItem::quit(None),
+        &quit_item,
     ]);
 
     let edit_menu = Submenu::new("Edit", true);
@@ -87,14 +200,16 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
         Code::Digit9,
     ];
     let mut switch_accounts = Vec::with_capacity(codes.len());
+    let mut switch_account_items = Vec::with_capacity(codes.len());
     for (idx, code) in codes.into_iter().enumerate() {
         let item = MenuItem::new(
-            format!("Switch to Account {}", idx + 1),
-            true,
+            format!("Account {}", idx + 1),
+            false,
             Some(Accelerator::new(Some(Modifiers::SUPER), code)),
         );
         let _ = accounts_menu.append(&item);
         switch_accounts.push(item.id().clone());
+        switch_account_items.push(item);
     }
 
     let window_menu = Submenu::new("Window", true);
@@ -106,7 +221,6 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
     let _ = menu.append_items(&[&app_menu, &edit_menu, &accounts_menu, &window_menu]);
 
     let tray_show = MenuItem::new("Show Hopr", true, None);
-    let tray_quit = MenuItem::new("Quit Hopr", true, None);
 
     let ids = AppMenuIds {
         new_account: new_account.id().clone(),
@@ -114,8 +228,9 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
         toggle_mute: toggle_mute.id().clone(),
         open_settings: open_settings.id().clone(),
         switch_accounts,
+        switch_account_items,
         tray_show: tray_show.id().clone(),
-        tray_quit: tray_quit.id().clone(),
+        tray_quit: quit_item.id().clone(),
     };
 
     menu.init_for_nsapp();

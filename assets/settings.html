@@ -50,9 +50,9 @@
     }
 
     .page {
-      max-width: 780px;
+      max-width: 820px;
       margin: 0 auto;
-      padding: 36px 40px 48px;
+      padding: 32px clamp(20px, 4vw, 44px) 48px;
     }
 
     .header-row {
@@ -100,16 +100,47 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      flex-wrap: wrap;
+      gap: 12px 16px;
       padding: 15px 0;
       border-bottom: 1px solid var(--border);
+    }
+
+    .acct-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .acct-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px 16px;
+    }
+
+    .acct-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-left: 58px;
     }
 
     .row-left {
       display: flex;
       align-items: center;
       gap: 14px;
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .row-info {
       min-width: 0;
+      flex: 1;
     }
 
     .avatar {
@@ -159,12 +190,14 @@
     .row-sub {
       font-size: 12.5px;
       color: var(--muted);
+      word-break: break-word;
     }
 
     .row-right {
       display: flex;
       align-items: center;
-      gap: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
       flex-shrink: 0;
     }
 
@@ -262,6 +295,64 @@
     .pref-btn:hover {
       background: var(--btn-hover);
     }
+
+    .group-input {
+      width: 148px;
+      height: 28px;
+      padding: 0 9px;
+      border-radius: 7px;
+      border: 1px solid var(--btn-border);
+      background: var(--btn-bg);
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+    }
+
+    .name-input {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 600;
+      padding: 2px 6px;
+      margin-left: -6px;
+      border-radius: 6px;
+      width: min(240px, 100%);
+      outline: none;
+    }
+
+    .name-input:hover {
+      border-color: var(--btn-border);
+    }
+
+    .name-input:focus {
+      border-color: var(--accent);
+      background: var(--btn-bg);
+    }
+
+    .reminder-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 12px 0 16px;
+      align-items: center;
+    }
+
+    .reminder-input, .reminder-select {
+      height: 32px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid var(--btn-border);
+      background: var(--btn-bg);
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .reminder-input {
+      flex: 1;
+      min-width: 180px;
+    }
   </style>
 </head>
 <body>
@@ -278,7 +369,46 @@
     <input id="avatar-picker" type="file" accept="image/*" style="display: none;" />
     <button id="add-acct-btn" class="add-acct-btn">Add account</button>
 
-    <h2>Notifications</h2>
+    <h2>Reminders</h2>
+    <p class="subtitle">Schedule local follow-up reminders without any WhatsApp message automation.</p>
+    <div class="reminder-form">
+      <select id="reminder-acct" class="reminder-select"></select>
+      <input id="reminder-note" class="reminder-input" type="text" placeholder="Reminder note (e.g. Follow up tomorrow)" />
+      <select id="reminder-delay" class="reminder-select">
+        <option value="60">In 1 min</option>
+        <option value="3600" selected>In 1 hour</option>
+        <option value="10800">In 3 hours</option>
+        <option value="86400">Tomorrow</option>
+      </select>
+      <button id="add-reminder-btn" class="done-btn">Add reminder</button>
+    </div>
+    <div id="reminders-list" class="list"></div>
+
+    <h2>Lifecycle &amp; Window</h2>
+    <div class="list">
+      <div class="row">
+        <div class="row-title" style="font-weight: 500; font-size: 14px;">Auto-hibernate inactive accounts</div>
+        <button id="hibernate-mins-btn" class="pref-btn">15 min</button>
+      </div>
+      <div class="row">
+        <div class="row-title" style="font-weight: 500; font-size: 14px;">Max live webviews</div>
+        <button id="max-live-btn" class="pref-btn">3</button>
+      </div>
+      <div class="row">
+        <div class="row-title" style="font-weight: 500; font-size: 14px;">Periodic wake (30s sync every 10 min)</div>
+        <button id="periodic-wake-btn" class="pref-btn">Off</button>
+      </div>
+      <div class="row">
+        <div class="row-title" style="font-weight: 500; font-size: 14px;">Quit app when window is closed</div>
+        <button id="quit-on-close-btn" class="pref-btn">Off</button>
+      </div>
+      <div class="row">
+        <div class="row-title" style="font-weight: 500; font-size: 14px;">Launch at login (starts hidden in menu bar)</div>
+        <button id="launch-login-btn" class="pref-btn">Off</button>
+      </div>
+    </div>
+
+    <h2>Notifications &amp; Privacy</h2>
     <div class="list">
       <div class="row">
         <div class="row-title" style="font-weight: 500; font-size: 14px;">Show message previews</div>
@@ -289,6 +419,9 @@
         <button id="dock-badge-btn" class="pref-btn">Total unread</button>
       </div>
     </div>
+    <p class="subtitle" style="margin-top: 18px;">
+      Built by Vivago.
+    </p>
   </div>
 
   <script>
@@ -312,41 +445,9 @@
         </svg>
       </span>`;
 
-    let pendingAvatarAccountId = null;
-    const avatarPicker = document.getElementById("avatar-picker");
-
     const openAvatarPicker = (accountId) => {
-      pendingAvatarAccountId = accountId;
-      avatarPicker.value = "";
-      avatarPicker.click();
+      post({ type: "pick_custom_avatar", id: accountId });
     };
-
-    avatarPicker.addEventListener("change", () => {
-      const file = avatarPicker.files && avatarPicker.files[0];
-      const accountId = pendingAvatarAccountId;
-      pendingAvatarAccountId = null;
-      if (!file || !accountId) return;
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const size = 128;
-          const canvas = document.createElement("canvas");
-          canvas.width = size;
-          canvas.height = size;
-          const ctx = canvas.getContext("2d");
-          const minSide = Math.min(img.width, img.height);
-          const sx = (img.width - minSide) / 2;
-          const sy = (img.height - minSide) / 2;
-          ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
-          post({ type: "set_custom_avatar", id: accountId, avatar_url: dataUrl });
-        };
-        img.src = String(reader.result || "");
-      };
-      reader.readAsDataURL(file);
-    });
 
     document.getElementById("done-btn").addEventListener("click", () => {
       post({ type: "close_settings" });
@@ -364,14 +465,49 @@
       post({ type: "toggle_dock_badge" });
     });
 
+    document.getElementById("hibernate-mins-btn").addEventListener("click", () => {
+      post({ type: "cycle_hibernate_mins" });
+    });
+
+    document.getElementById("max-live-btn").addEventListener("click", () => {
+      post({ type: "cycle_max_live" });
+    });
+
+    document.getElementById("periodic-wake-btn").addEventListener("click", () => {
+      post({ type: "toggle_periodic_wake" });
+    });
+
+    document.getElementById("quit-on-close-btn").addEventListener("click", () => {
+      post({ type: "toggle_quit_on_close" });
+    });
+
+    document.getElementById("launch-login-btn").addEventListener("click", () => {
+      post({ type: "toggle_launch_at_login" });
+    });
+
+    document.getElementById("add-reminder-btn").addEventListener("click", () => {
+      const account_id = document.getElementById("reminder-acct").value;
+      const noteEl = document.getElementById("reminder-note");
+      const note = noteEl.value.trim();
+      const delay_secs = parseInt(document.getElementById("reminder-delay").value, 10) || 3600;
+      if (!account_id || !note) return;
+      noteEl.value = "";
+      post({ type: "add_reminder", account_id, note, delay_secs });
+    });
+
+    post({ type: "settings_ready" });
+
     window.__updateSettings = (state) => {
       const list = document.getElementById("accounts-list");
       list.innerHTML = "";
       const accounts = state.accounts || [];
 
       for (const acct of accounts) {
-        const row = document.createElement("div");
-        row.className = "row";
+        const card = document.createElement("div");
+        card.className = "acct-card";
+
+        const top = document.createElement("div");
+        top.className = "acct-top";
 
         const left = document.createElement("div");
         left.className = "row-left";
@@ -389,9 +525,18 @@
         avatar.addEventListener("click", () => openAvatarPicker(acct.id));
 
         const info = document.createElement("div");
-        const title = document.createElement("div");
-        title.className = "row-title";
-        title.textContent = acct.name;
+        info.className = "row-info";
+        const titleInput = document.createElement("input");
+        titleInput.type = "text";
+        titleInput.className = "name-input";
+        titleInput.value = acct.name;
+        titleInput.title = "Click to rename account";
+        titleInput.addEventListener("change", () => {
+          post({ type: "rename_account", id: acct.id, name: titleInput.value });
+        });
+        titleInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") titleInput.blur();
+        });
 
         const sub = document.createElement("div");
         sub.className = "row-sub";
@@ -400,40 +545,13 @@
         parts.push(acct.short_sleep_summary);
         sub.textContent = parts.filter(Boolean).join(" · ");
 
-        info.appendChild(title);
+        info.appendChild(titleInput);
         info.appendChild(sub);
         left.appendChild(avatar);
         left.appendChild(info);
 
-        const right = document.createElement("div");
-        right.className = "row-right";
-
-        const photoBtn = document.createElement("button");
-        photoBtn.className = "ghost-btn";
-        photoBtn.textContent = "Change photo";
-        photoBtn.title = "Set custom photo for this device only";
-        photoBtn.addEventListener("click", () => openAvatarPicker(acct.id));
-        right.appendChild(photoBtn);
-
-        if (acct.has_custom_avatar) {
-          const resetBtn = document.createElement("button");
-          resetBtn.className = "ghost-btn";
-          resetBtn.textContent = "Reset photo";
-          resetBtn.addEventListener("click", () => {
-            post({ type: "set_custom_avatar", id: acct.id, avatar_url: null });
-          });
-          right.appendChild(resetBtn);
-        }
-
-        if (accounts.length > 1) {
-          const removeBtn = document.createElement("button");
-          removeBtn.className = "ghost-btn danger";
-          removeBtn.textContent = "Remove";
-          removeBtn.addEventListener("click", () => {
-            post({ type: "remove_account", id: acct.id });
-          });
-          right.appendChild(removeBtn);
-        }
+        const pinGroup = document.createElement("div");
+        pinGroup.className = "row-right";
 
         const label = document.createElement("span");
         label.className = "toggle-label";
@@ -450,12 +568,80 @@
           });
         });
 
-        right.appendChild(label);
-        right.appendChild(sw);
+        pinGroup.appendChild(label);
+        pinGroup.appendChild(sw);
 
-        row.appendChild(left);
-        row.appendChild(right);
-        list.appendChild(row);
+        top.appendChild(left);
+        top.appendChild(pinGroup);
+
+        const actions = document.createElement("div");
+        actions.className = "acct-actions";
+
+        const groupInput = document.createElement("input");
+        groupInput.type = "text";
+        groupInput.className = "group-input";
+        groupInput.placeholder = "Group (e.g. Office)";
+        groupInput.value = acct.group || "";
+        groupInput.title = "Group accounts under a collapsible sidebar section";
+        groupInput.addEventListener("change", () => {
+          post({
+            type: "set_group",
+            id: acct.id,
+            group: groupInput.value.trim() || null,
+          });
+        });
+        actions.appendChild(groupInput);
+
+        const soundBtn = document.createElement("button");
+        soundBtn.className = "ghost-btn";
+        soundBtn.textContent = `🔔 ${acct.notif_sound || "default"}`;
+        soundBtn.title = "Change notification sound for this account";
+        soundBtn.addEventListener("click", () => {
+          post({ type: "cycle_notif_sound", id: acct.id });
+        });
+        actions.appendChild(soundBtn);
+
+        const lockBtn = document.createElement("button");
+        lockBtn.className = "ghost-btn";
+        lockBtn.textContent = acct.locked ? "🔒 Locked" : "Unlock";
+        lockBtn.title = "Lock or unlock account with Touch ID";
+        lockBtn.addEventListener("click", () => {
+          post({ type: "toggle_account_lock", id: acct.id });
+        });
+        actions.appendChild(lockBtn);
+
+        const photoBtn = document.createElement("button");
+        photoBtn.className = "ghost-btn";
+        photoBtn.textContent = "Change photo";
+        photoBtn.title = "Set custom photo for this device only";
+        photoBtn.addEventListener("click", () => openAvatarPicker(acct.id));
+        actions.appendChild(photoBtn);
+
+        if (acct.has_custom_avatar) {
+          const resetBtn = document.createElement("button");
+          resetBtn.className = "ghost-btn";
+          resetBtn.textContent = "Reset photo";
+          resetBtn.addEventListener("click", () => {
+            post({ type: "set_custom_avatar", id: acct.id, avatar_url: null });
+          });
+          actions.appendChild(resetBtn);
+        }
+
+        if (accounts.length > 1) {
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "ghost-btn danger";
+          removeBtn.textContent = "Remove";
+          removeBtn.addEventListener("click", () => {
+            if (confirm(`Remove "${acct.name}"? This will delete its local session and cached avatar on this Mac.`)) {
+              post({ type: "remove_account", id: acct.id });
+            }
+          });
+          actions.appendChild(removeBtn);
+        }
+
+        card.appendChild(top);
+        card.appendChild(actions);
+        list.appendChild(card);
       }
 
       document.getElementById("previews-btn").textContent = state.show_message_previews
@@ -464,6 +650,61 @@
       document.getElementById("dock-badge-btn").textContent = state.dock_badge_enabled
         ? "Total unread"
         : "Off";
+      document.getElementById("hibernate-mins-btn").textContent = `${state.hibernate_after_mins} min`;
+      document.getElementById("max-live-btn").textContent = String(state.max_live_webviews);
+      document.getElementById("periodic-wake-btn").textContent = state.periodic_wake_enabled
+        ? "On"
+        : "Off";
+      document.getElementById("quit-on-close-btn").textContent = state.quit_on_close
+        ? "On"
+        : "Off";
+      document.getElementById("launch-login-btn").textContent = state.launch_at_login
+        ? "On"
+        : "Off";
+
+      const acctSelect = document.getElementById("reminder-acct");
+      const prevVal = acctSelect.value;
+      acctSelect.innerHTML = "";
+      for (const acct of accounts) {
+        const opt = document.createElement("option");
+        opt.value = acct.id;
+        opt.textContent = acct.name;
+        acctSelect.appendChild(opt);
+      }
+      if (prevVal && accounts.some((a) => a.id === prevVal)) {
+        acctSelect.value = prevVal;
+      }
+
+      const remList = document.getElementById("reminders-list");
+      remList.innerHTML = "";
+      const nowSecs = Math.floor(Date.now() / 1000);
+      for (const rem of state.reminders || []) {
+        const row = document.createElement("div");
+        row.className = "row";
+        const acct = accounts.find((a) => a.id === rem.account_id);
+        const minsLeft = Math.max(1, Math.round((rem.due_at_epoch_secs - nowSecs) / 60));
+
+        const left = document.createElement("div");
+        const title = document.createElement("div");
+        title.className = "row-title";
+        title.textContent = rem.note;
+        const sub = document.createElement("div");
+        sub.className = "row-sub";
+        sub.textContent = `${acct ? acct.name : "Account"} · due in ~${minsLeft} min`;
+        left.appendChild(title);
+        left.appendChild(sub);
+
+        const cancelBtn = document.createElement("button");
+        cancelBtn.className = "ghost-btn danger";
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.addEventListener("click", () => {
+          post({ type: "remove_reminder", id: rem.id });
+        });
+
+        row.appendChild(left);
+        row.appendChild(cancelBtn);
+        remList.appendChild(row);
+      }
     };
   </script>
 </body>
