@@ -28,7 +28,7 @@ use tao::platform::macos::WindowBuilderExtMacOS;
 use tao::window::{Window, WindowBuilder};
 use tray_icon::{TrayIcon, TrayIconEvent};
 use uuid::Uuid;
-use webview_manager::{AccountView, AppEvent, WebViewManager};
+use webview_manager::{AccountView, AppEvent, WebViewManager, teardown_webview};
 use wry::{Rect, WebView, WebViewBuilder};
 
 const SIDEBAR_WIDTH: f64 = 80.0;
@@ -206,22 +206,43 @@ fn set_settings_mode(
             ));
         }
     } else {
-        *settings_wv = None;
+        if let Some(swv) = settings_wv.take() {
+            teardown_webview(swv, "settings");
+        }
     }
     manager.set_active_visible(!settings_open);
 }
 
 fn spawn_lifecycle_ticker(proxy: EventLoopProxy<AppEvent>) {
+    #[cfg(debug_assertions)]
+    if std::env::var("HOPR_DEBUG_TEST_SEQUENCE").as_deref() == Ok("1") {
+        let test_proxy = proxy.clone();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_secs(5));
+            let _ = test_proxy.send_event(AppEvent::DebugTestStep(1)); // open settings
+            thread::sleep(Duration::from_secs(3));
+            let _ = test_proxy.send_event(AppEvent::DebugTestStep(2)); // close settings
+            thread::sleep(Duration::from_secs(2));
+            let _ = test_proxy.send_event(AppEvent::DebugTestStep(3)); // switch to account 2 (Business)
+            thread::sleep(Duration::from_secs(5));
+            let _ = test_proxy.send_event(AppEvent::DebugTestStep(4)); // switch back to account 1 (Personal)
+        });
+    }
     thread::spawn(move || {
-        // Initial quick stagger ticks (2s) for cold start, then 15s coalesced lifecycle checks
+        // Initial quick stagger ticks (2s) for cold start, then coalesced lifecycle checks
         for _ in 0..4 {
             thread::sleep(Duration::from_secs(2));
             if proxy.send_event(AppEvent::LifecycleTick).is_err() {
                 return;
             }
         }
+        let interval = if cfg!(debug_assertions) && std::env::var("HOPR_DEBUG_HIBERNATE_SECS").is_ok() {
+            Duration::from_secs(5)
+        } else {
+            Duration::from_secs(15)
+        };
         loop {
-            thread::sleep(Duration::from_secs(15));
+            thread::sleep(interval);
             if proxy.send_event(AppEvent::LifecycleTick).is_err() {
                 break;
             }
@@ -594,6 +615,42 @@ fn main() {
                 manager.resize_all(rects.content);
             }
             Event::WindowEvent {
+                event: WindowEvent::Focused(focused),
+                ..
+            } => {
+                if focused && !window.is_minimized() {
+                    let rects = layout_rects(&window);
+                    manager.on_window_restored(
+                        &cfg.accounts,
+                        &window,
+                        &proxy,
+                        rects.content,
+                        cfg.max_live_webviews,
+                        !settings_open,
+                    );
+                    sync_ui(
+                        &sidebar,
+                        settings_wv.as_ref(),
+                        &menu_ids,
+                        tray_icon.as_ref(),
+                        &cfg,
+                        &manager,
+                        settings_open,
+                    );
+                } else if !focused && window.is_minimized() {
+                    manager.on_window_hidden_or_minimized();
+                    sync_ui(
+                        &sidebar,
+                        settings_wv.as_ref(),
+                        &menu_ids,
+                        tray_icon.as_ref(),
+                        &cfg,
+                        &manager,
+                        settings_open,
+                    );
+                }
+            }
+            Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
             } => {
@@ -632,6 +689,47 @@ fn main() {
                         cfg.max_live_webviews,
                         !settings_open,
                     );
+                }
+                #[cfg(debug_assertions)]
+                AppEvent::DebugTestStep(step) => {
+                    let rects = layout_rects(&window);
+                    match step {
+                        1 => {
+                            settings_open = true;
+                            set_settings_mode(true, &window, &proxy, &mut settings_wv, &manager);
+                        }
+                        2 => {
+                            settings_open = false;
+                            set_settings_mode(false, &window, &proxy, &mut settings_wv, &manager);
+                        }
+                        3 => {
+                            if let Some(id) = cfg.accounts.get(1).map(|a| a.id) {
+                                let _ = manager.switch_to(
+                                    id,
+                                    &cfg.accounts,
+                                    &window,
+                                    &proxy,
+                                    rects.content,
+                                    cfg.max_live_webviews,
+                                    true,
+                                );
+                            }
+                        }
+                        4 => {
+                            if let Some(id) = cfg.accounts.first().map(|a| a.id) {
+                                let _ = manager.switch_to(
+                                    id,
+                                    &cfg.accounts,
+                                    &window,
+                                    &proxy,
+                                    rects.content,
+                                    cfg.max_live_webviews,
+                                    true,
+                                );
+                            }
+                        }
+                        _ => {}
+                    }
                 }
                 AppEvent::WebViewIpc {
                     account_id,

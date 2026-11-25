@@ -220,6 +220,12 @@ impl Default for AppConfig {
 
 impl AppConfig {
     pub fn app_support_dir() -> PathBuf {
+        #[cfg(debug_assertions)]
+        if let Ok(dir) = std::env::var("HOPR_DATA_DIR")
+            && !dir.trim().is_empty()
+        {
+            return PathBuf::from(dir);
+        }
         if let Some(home) = std::env::var_os("HOME") {
             PathBuf::from(home).join("Library/Application Support/Hopr")
         } else {

@@ -1,6 +1,7 @@
 use crate::config::{AccountConfig, AppConfig};
 use crate::macos::{downloads_dir, is_low_power_mode, open_external_url};
 use serde::Serialize;
+use objc2::rc::Weak;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::Arc;
@@ -9,7 +10,7 @@ use std::time::{Duration, Instant};
 use tao::event_loop::EventLoopProxy;
 use tao::window::Window;
 use uuid::Uuid;
-use wry::{Rect, WebView, WebViewBuilder, WebViewBuilderExtDarwin};
+use wry::{Rect, WebView, WebViewBuilder, WebViewBuilderExtDarwin, WebViewExtMacOS};
 
 const WHATSAPP_URL: &str = "https://web.whatsapp.com";
 const SAFARI_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
@@ -32,6 +33,8 @@ pub enum AppEvent {
     },
     LifecycleTick,
     FocusWindow,
+    #[cfg(debug_assertions)]
+    DebugTestStep(u8),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -80,6 +83,7 @@ pub struct AccountRuntime {
     pub backoff_step: usize,
     pub next_retry_at: Option<Instant>,
     pub last_active: Instant,
+    pub last_user_interaction: Instant,
     pub last_woke: Option<Instant>,
     pub waking_until: Option<Instant>,
     rate_limiter: RateLimiter,
@@ -87,6 +91,7 @@ pub struct AccountRuntime {
 
 impl Default for AccountRuntime {
     fn default() -> Self {
+        let now = Instant::now();
         Self {
             webview: None,
             lifecycle: LifecycleState::Hibernated,
@@ -98,7 +103,8 @@ impl Default for AccountRuntime {
             reconnecting: false,
             backoff_step: 0,
             next_retry_at: None,
-            last_active: Instant::now(),
+            last_active: now,
+            last_user_interaction: now,
             last_woke: None,
             waking_until: None,
             rate_limiter: RateLimiter::default(),
@@ -234,9 +240,12 @@ impl WebViewManager {
             && let Some(rt) = self.runtimes.get_mut(&active_id)
             && let Some(wv) = &rt.webview
         {
+            let prev = rt.lifecycle;
             let _ = wv.set_visible(false);
             rt.lifecycle = LifecycleState::Background;
             rt.last_active = Instant::now();
+            rt.last_user_interaction = Instant::now();
+            log_transition(active_id, prev, LifecycleState::Background, "window_hidden_or_minimized", 0);
         }
     }
 
@@ -259,6 +268,7 @@ impl WebViewManager {
                 if let Some(rt) = self.runtimes.get_mut(&active_id)
                     && let Some(wv) = &rt.webview
                 {
+                    let prev = rt.lifecycle;
                     let _ = wv.set_bounds(bounds);
                     let _ = wv.set_visible(visible);
                     if visible {
@@ -266,6 +276,10 @@ impl WebViewManager {
                     }
                     rt.lifecycle = LifecycleState::Active;
                     rt.last_active = Instant::now();
+                    rt.last_user_interaction = Instant::now();
+                    if prev != LifecycleState::Active {
+                        log_transition(active_id, prev, LifecycleState::Active, "window_restored", 0);
+                    }
                 }
             } else {
                 let _ = self.switch_to(active_id, accounts, window, proxy, bounds, max_live, visible);
@@ -341,10 +355,12 @@ impl WebViewManager {
             && prev_id != target_id
             && let Some(prev) = self.runtimes.get_mut(&prev_id)
         {
+            let old_state = prev.lifecycle;
             if let Some(wv) = &prev.webview {
                 let _ = wv.set_visible(false);
                 prev.lifecycle = LifecycleState::Background;
                 prev.last_active = Instant::now();
+                log_transition(prev_id, old_state, LifecycleState::Background, "switched_away", 0);
             } else {
                 prev.lifecycle = LifecycleState::Hibernated;
             }
@@ -355,6 +371,11 @@ impl WebViewManager {
         };
 
         self.pending_loads.retain(|id| *id != target_id);
+        let prev_target_state = self
+            .runtimes
+            .get(&target_id)
+            .map(|r| r.lifecycle)
+            .unwrap_or(LifecycleState::Hibernated);
         self.ensure_webview(acct, window, proxy, bounds, visible)?;
         let rt = self.runtimes.entry(target_id).or_default();
         if let Some(wv) = &rt.webview {
@@ -366,7 +387,15 @@ impl WebViewManager {
         }
         rt.lifecycle = LifecycleState::Active;
         rt.last_active = Instant::now();
+        rt.last_user_interaction = Instant::now();
         rt.waking_until = None;
+        log_transition(
+            target_id,
+            prev_target_state,
+            LifecycleState::Active,
+            "user_selected",
+            0,
+        );
         self.active_id = Some(target_id);
         self.enforce_max_live(accounts, max_live);
         Ok(())
@@ -429,8 +458,19 @@ impl WebViewManager {
         let dl_counter_start = Arc::clone(&self.active_downloads);
         let dl_counter_end = Arc::clone(&self.active_downloads);
 
+        let target_url: String = {
+            #[cfg(debug_assertions)]
+            {
+                std::env::var("HOPR_DEBUG_URL").unwrap_or_else(|_| WHATSAPP_URL.to_string())
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                WHATSAPP_URL.to_string()
+            }
+        };
+
         let webview = WebViewBuilder::new()
-            .with_url(WHATSAPP_URL)
+            .with_url(&target_url)
             .with_data_store_identifier(acct.uuid_bytes())
             .with_user_agent(SAFARI_UA)
             .with_devtools(cfg!(debug_assertions))
@@ -478,16 +518,33 @@ impl WebViewManager {
     }
 
     pub fn hibernate(&mut self, id: Uuid) {
+        self.hibernate_with_reason(id, "manual_sleep");
+    }
+
+    pub fn hibernate_with_reason(&mut self, id: Uuid, reason: &str) {
         if let Some(rt) = self.runtimes.get_mut(&id) {
-            rt.webview = None;
+            let prev = rt.lifecycle;
+            let idle_secs = Instant::now()
+                .duration_since(rt.last_user_interaction)
+                .as_secs();
+            if let Some(wv) = rt.webview.take() {
+                teardown_webview(wv, &format!("acct-{id}"));
+            }
             rt.lifecycle = LifecycleState::Hibernated;
             rt.connection_state = "hibernated".to_string();
             rt.waking_until = None;
+            if prev != LifecycleState::Hibernated {
+                log_transition(id, prev, LifecycleState::Hibernated, reason, idle_secs);
+            }
         }
     }
 
     pub fn remove(&mut self, id: Uuid) {
-        self.runtimes.remove(&id);
+        if let Some(mut rt) = self.runtimes.remove(&id)
+            && let Some(wv) = rt.webview.take()
+        {
+            teardown_webview(wv, &format!("remove-{id}"));
+        }
         self.pending_loads.retain(|x| *x != id);
         if self.active_id == Some(id) {
             self.active_id = None;
@@ -502,14 +559,16 @@ impl WebViewManager {
             .filter(|id| Some(*id) != self.active_id)
             .collect();
         for id in ids {
-            self.hibernate(id);
+            self.hibernate_with_reason(id, "hibernate_all_inactive");
         }
     }
 
     pub fn shutdown_all(&mut self) {
         self.pending_loads.clear();
-        for rt in self.runtimes.values_mut() {
-            rt.webview = None;
+        for (id, rt) in self.runtimes.iter_mut() {
+            if let Some(wv) = rt.webview.take() {
+                teardown_webview(wv, &format!("shutdown-{id}"));
+            }
             rt.lifecycle = LifecycleState::Hibernated;
         }
     }
@@ -539,7 +598,12 @@ impl WebViewManager {
         };
 
         for acct in &cfg.accounts {
-            if Some(acct.id) == self.active_id {
+            let is_live_active = self
+                .runtimes
+                .get(&acct.id)
+                .map(|r| r.lifecycle == LifecycleState::Active)
+                .unwrap_or(false);
+            if is_live_active {
                 if let Some(rt) = self.runtimes.get_mut(&acct.id)
                     && let Some(retry_at) = rt.next_retry_at
                     && now >= retry_at
@@ -559,20 +623,38 @@ impl WebViewManager {
                 LifecycleState::Background => {
                     if let Some(until) = rt.waking_until {
                         if now >= until {
-                            rt.webview = None;
+                            if let Some(wv) = rt.webview.take() {
+                                teardown_webview(wv, &format!("wake-end-{}", acct.id));
+                            }
                             rt.lifecycle = LifecycleState::Hibernated;
                             rt.connection_state = "hibernated".to_string();
                             rt.waking_until = None;
+                            log_transition(
+                                acct.id,
+                                LifecycleState::Background,
+                                LifecycleState::Hibernated,
+                                "periodic_wake_window_ended",
+                                now.duration_since(rt.last_user_interaction).as_secs(),
+                            );
                             changed = true;
                         }
                     } else if !acct.keep_connected
-                        && cfg.hibernate_after_mins > 0
-                        && now.duration_since(rt.last_active)
-                            >= Duration::from_secs(cfg.hibernate_after_mins * 60)
+                        && let Some(hibernate_dur) = debug_hibernate_duration(cfg)
+                        && now.duration_since(rt.last_user_interaction) >= hibernate_dur
                     {
-                        rt.webview = None;
+                        let idle_secs = now.duration_since(rt.last_user_interaction).as_secs();
+                        if let Some(wv) = rt.webview.take() {
+                            teardown_webview(wv, &format!("auto-idle-{}", acct.id));
+                        }
                         rt.lifecycle = LifecycleState::Hibernated;
                         rt.connection_state = "hibernated".to_string();
+                        log_transition(
+                            acct.id,
+                            LifecycleState::Background,
+                            LifecycleState::Hibernated,
+                            "auto_hibernate_idle",
+                            idle_secs,
+                        );
                         changed = true;
                     } else if let Some(retry_at) = rt.next_retry_at
                         && now >= retry_at
@@ -666,6 +748,69 @@ impl WebViewManager {
             })
             .collect()
     }
+}
+
+pub fn log_transition(
+    id: Uuid,
+    from: LifecycleState,
+    to: LifecycleState,
+    reason: &str,
+    idle_secs: u64,
+) {
+    eprintln!(
+        "[lifecycle] acct={id} from={from:?} to={to:?} reason={reason} idle_secs={idle_secs}"
+    );
+}
+
+fn debug_hibernate_duration(cfg: &AppConfig) -> Option<Duration> {
+    #[cfg(debug_assertions)]
+    if let Ok(raw) = std::env::var("HOPR_DEBUG_HIBERNATE_SECS")
+        && let Ok(secs) = raw.trim().parse::<u64>()
+        && secs > 0
+    {
+        return Some(Duration::from_secs(secs));
+    }
+    if cfg.hibernate_after_mins > 0 {
+        Some(Duration::from_secs(cfg.hibernate_after_mins * 60))
+    } else {
+        None
+    }
+}
+
+pub fn teardown_webview(wv: WebView, label: &str) {
+    let wk = wv.webview();
+    let mgr = wv.manager();
+    let weak_wk = Weak::from_retained(&wk);
+
+    let wk_rc_before: usize = unsafe { objc2::msg_send![&*wk, retainCount] };
+    let mgr_rc_before: usize = unsafe { objc2::msg_send![&*mgr, retainCount] };
+
+    unsafe {
+        wk.stopLoading();
+    }
+    let _ = wv.load_url("about:blank");
+
+    unsafe {
+        mgr.removeAllScriptMessageHandlers();
+        mgr.removeAllUserScripts();
+        wk.setNavigationDelegate(None);
+        wk.setUIDelegate(None);
+        wk.removeFromSuperview();
+    }
+
+    drop(mgr);
+    drop(wk);
+    drop(wv);
+
+    let after_alive = weak_wk.load();
+    let wk_rc_after = after_alive
+        .as_ref()
+        .map(|obj| unsafe { objc2::msg_send![&**obj, retainCount] })
+        .unwrap_or(0usize);
+    eprintln!(
+        "[teardown] label={label} wk_rc_before={wk_rc_before} mgr_rc_before={mgr_rc_before} wk_alive_after_drop={} wk_rc_after={wk_rc_after}",
+        after_alive.is_some()
+    );
 }
 
 pub fn is_trusted_ipc_origin(origin: &str) -> bool {

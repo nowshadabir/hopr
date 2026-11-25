@@ -22,6 +22,10 @@
     <string>10000</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Hopr needs microphone access for WhatsApp voice and video calls.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Hopr needs camera access for WhatsApp video calls.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>SUFeedURL</key>

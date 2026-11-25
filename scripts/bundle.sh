@@ -63,21 +63,34 @@ if [[ -n "${HOPR_FEED_URL:-}" ]]; then
   /usr/libexec/PlistBuddy -c "Set :SUFeedURL ${HOPR_FEED_URL}" "${APP_DIR}/Contents/Info.plist"
 fi
 
-if [[ -f "logo.png" ]]; then
+ICON_SRC=""
+TMP_ICON_RENDER=""
+if [[ -f "logo.svg" ]] && command -v qlmanage >/dev/null 2>&1; then
+  TMP_ICON_RENDER=$(mktemp -d)
+  if qlmanage -t -s 1024 -o "$TMP_ICON_RENDER" "logo.svg" >/dev/null 2>&1 && [[ -f "${TMP_ICON_RENDER}/logo.svg.png" ]]; then
+    ICON_SRC="${TMP_ICON_RENDER}/logo.svg.png"
+  fi
+fi
+if [[ -z "$ICON_SRC" && -f "logo.png" ]]; then
+  ICON_SRC="logo.png"
+fi
+
+if [[ -n "$ICON_SRC" ]]; then
   ICONSET_DIR=$(mktemp -d)/AppIcon.iconset
   mkdir -p "$ICONSET_DIR"
-  sips -z 16 16     logo.png --out "${ICONSET_DIR}/icon_16x16.png" >/dev/null
-  sips -z 32 32     logo.png --out "${ICONSET_DIR}/icon_16x16@2x.png" >/dev/null
-  sips -z 32 32     logo.png --out "${ICONSET_DIR}/icon_32x32.png" >/dev/null
-  sips -z 64 64     logo.png --out "${ICONSET_DIR}/icon_32x32@2x.png" >/dev/null
-  sips -z 128 128   logo.png --out "${ICONSET_DIR}/icon_128x128.png" >/dev/null
-  sips -z 256 256   logo.png --out "${ICONSET_DIR}/icon_128x128@2x.png" >/dev/null
-  sips -z 256 256   logo.png --out "${ICONSET_DIR}/icon_256x256.png" >/dev/null
-  sips -z 512 512   logo.png --out "${ICONSET_DIR}/icon_256x256@2x.png" >/dev/null
-  sips -z 512 512   logo.png --out "${ICONSET_DIR}/icon_512x512.png" >/dev/null
-  sips -z 1024 1024 logo.png --out "${ICONSET_DIR}/icon_512x512@2x.png" >/dev/null
+  sips -z 16 16     "$ICON_SRC" --out "${ICONSET_DIR}/icon_16x16.png" >/dev/null
+  sips -z 32 32     "$ICON_SRC" --out "${ICONSET_DIR}/icon_16x16@2x.png" >/dev/null
+  sips -z 32 32     "$ICON_SRC" --out "${ICONSET_DIR}/icon_32x32.png" >/dev/null
+  sips -z 64 64     "$ICON_SRC" --out "${ICONSET_DIR}/icon_32x32@2x.png" >/dev/null
+  sips -z 128 128   "$ICON_SRC" --out "${ICONSET_DIR}/icon_128x128.png" >/dev/null
+  sips -z 256 256   "$ICON_SRC" --out "${ICONSET_DIR}/icon_128x128@2x.png" >/dev/null
+  sips -z 256 256   "$ICON_SRC" --out "${ICONSET_DIR}/icon_256x256.png" >/dev/null
+  sips -z 512 512   "$ICON_SRC" --out "${ICONSET_DIR}/icon_256x256@2x.png" >/dev/null
+  sips -z 512 512   "$ICON_SRC" --out "${ICONSET_DIR}/icon_512x512.png" >/dev/null
+  sips -z 1024 1024 "$ICON_SRC" --out "${ICONSET_DIR}/icon_512x512@2x.png" >/dev/null
   iconutil -c icns "$ICONSET_DIR" -o "${APP_DIR}/Contents/Resources/AppIcon.icns"
 fi
+rm -rf "$TMP_ICON_RENDER"
 
 # Embed Sparkle.framework (preserving symlinks)
 ditto "${SPARKLE_DIR}/Sparkle.framework" "${APP_DIR}/Contents/Frameworks/Sparkle.framework"
