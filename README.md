@@ -1,4 +1,4 @@
-<h1 align="center">Hopr</h1> <p align="center"> <strong>Hop between WhatsApp accounts on your Mac, without the bloat.</strong><br> A small, native macOS app written in Rust, built by <a href="https://vivago.tech">Vivago Technologies</a>. </p> <p align="center"> <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a> <img alt="Platform: macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-lightgrey.svg"> <img alt="Built with Rust" src="https://img.shields.io/badge/built%20with-Rust-orange.svg"> </p>
+<h1 align="center">Hopr</h1> <p align="center"> <strong>Hop between WhatsApp accounts on your Mac, without the bloat.</strong><br> A small, native macOS app written in Rust, built by <a href="https://vivagotechnologies.com">Vivago Technologies</a>. </p> <p align="center"> <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a> <img alt="Platform: macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-lightgrey.svg"> <img alt="Built with Rust" src="https://img.shields.io/badge/built%20with-Rust-orange.svg"> </p>
 What is Hopr?
 
 Hopr lets you use multiple WhatsApp accounts side by side in one lightweight Mac app. Each account runs in its own isolated session, so you log in once and stay logged in, with no QR rescans after a restart.
@@ -71,7 +71,7 @@ Validated bridge. Messages from the page to the app are origin-checked, size-lim
 Local files are kept in ~/Library/Application Support/Hopr/ with owner-only permissions.
 Signed, notarized builds with Hardened Runtime, and signed updates.
 
-To report a vulnerability, please don't open a public issue. Email security@vivago.tech with the details.
+To report a vulnerability, please don't open a public issue. Email hello@getvivago with the details.
 
 Fair use
 
@@ -104,4 +104,4 @@ Licensed under the Apache License, Version 2.0. You may not use this project exc
 
 Third-party components keep their own licenses, including Sparkle (MIT-style) and the Rust crates listed in Cargo.toml.
 
-<p align="center">Made by <a href="https://vivago.tech">Vivago Technologies</a></p>
+<p align="center">Made by <a href="https://vivagotechnologies.com">Vivago Technologies</a></p>
