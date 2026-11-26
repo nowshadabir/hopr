@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hopr Invoices</title>
+  <style>
+    :root {
+      --bg: #f5f3ed;
+      --card: #ffffff;
+      --border: rgba(0, 0, 0, 0.09);
+      --input-border: rgba(0, 0, 0, 0.16);
+      --text: #161816;
+      --muted: #646964;
+      --accent: #0e5a46;
+      --accent-hover: #0a4636;
+      --danger: #dc2626;
+      --pill-bg: #e7f3ed;
+      --pill-fg: #0e5a46;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #171918;
+        --card: #202321;
+        --border: rgba(255, 255, 255, 0.08);
+        --input-border: rgba(255, 255, 255, 0.15);
+        --text: #f2f3ef;
+        --muted: #9ca19b;
+        --accent: #198768;
+        --accent-hover: #146f55;
+        --danger: #f87171;
+        --pill-bg: rgba(25, 135, 104, 0.18);
+        --pill-fg: #6ee7b7;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 22px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      flex-shrink: 0;
+    }
+
+    .topbar h1 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      height: 34px;
+      padding: 0 13px;
+      border-radius: 8px;
+      border: 1px solid var(--input-border);
+      background: var(--card);
+      color: var(--text);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn:hover { opacity: 0.9; }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-danger {
+      color: var(--danger);
+      border-color: rgba(220, 38, 38, 0.35);
+    }
+
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 22px 40px;
+    }
+
+    .locked-box {
+      max-width: 460px;
+      margin: 60px auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      text-align: center;
+    }
+
+    .locked-box h2 { margin: 0 0 8px; font-size: 19px; }
+    .locked-box p { margin: 0 0 16px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+
+    label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    input, select {
+      width: 100%;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid var(--input-border);
+      background: transparent;
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 13px;
+    }
+
+    .inv-list-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .inv-list-row:last-child { border-bottom: none; }
+
+    .inv-title { font-weight: 700; font-size: 14px; }
+    .inv-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .editor-split {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    @media (max-width: 1040px) {
+      .editor-split { grid-template-columns: 1fr; }
+    }
+
+    /* Printable Paper Preview */
+    .paper {
+      background: #ffffff;
+      color: #111827;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      padding: 22px 24px;
+      font-size: 11px;
+      line-height: 1.4;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    .paper-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 6px;
+    }
+
+    .paper-brand {
+      text-align: center;
+      flex: 1;
+    }
+
+    .paper-brand img {
+      max-height: 36px;
+      max-width: 150px;
+      object-fit: contain;
+      margin-bottom: 3px;
+    }
+
+    .paper-brand-name {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
+    .mushok-pill {
+      border: 1px solid #111827;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 9.5px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .paper-meta-bar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      border-bottom: 1.5px solid #1f2937;
+      padding-bottom: 5px;
+      margin-bottom: 8px;
+    }
+
+    .paper-form-title {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 800;
+      margin: 6px 0 10px;
+      letter-spacing: 0.02em;
+    }
+
+    .paper-box {
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+    }
+
+    .paper-info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 16px;
+    }
+
+    .paper-kv {
+      display: grid;
+      grid-template-columns: 78px 1fr;
+      gap: 4px;
+      font-size: 10.5px;
+    }
+
+    .paper-kv strong { font-weight: 700; }
+
+    .paper-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+      font-size: 10.5px;
+    }
+
+    .paper-table th, .paper-table td {
+      border: 1px solid #d1d5db;
+      padding: 5px 6px;
+      text-align: left;
+    }
+
+    .paper-table th {
+      background: #f3f4f6;
+      font-size: 9.5px;
+      font-weight: 700;
+    }
+
+    .num { text-align: right !important; }
+
+    .paper-summary {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .fin-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2.5px 0;
+      font-size: 10.5px;
+    }
+
+    .fin-row.bold { font-weight: 800; border-top: 1px solid #e5e7eb; padding-top: 4px; margin-top: 2px; }
+    .fin-row.refund { color: #059669; font-weight: 700; }
+
+    .paper-sigs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-top: 28px;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .sig-line {
+      border-top: 1.5px solid #111827;
+      padding-top: 4px;
+    }
+
+    .paper-footer {
+      text-align: center;
+      margin-top: 12px;
+      font-size: 9.5px;
+      color: #4b5563;
+    }
+
+    .status-toast {
+      font-size: 12px;
+      color: var(--pill-fg);
+      background: var(--pill-bg);
+      padding: 4px 10px;
+      border-radius: 999px;
+      display: none;
+    }
+
+    .hidden { display: none !important; }
+
+    @media print {
+      body { background: #fff; overflow: visible; }
+      .topbar, .editor-form-col, #view-list, #view-profile, #view-locked { display: none !important; }
+      .content { padding: 0; overflow: visible; }
+      .editor-split { display: block; }
+      .paper { border: none; box-shadow: none; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <h1>Invoices</h1>
+        <span id="status-toast" class="status-toast"></span>
+      </div>
+      <div class="topbar-actions" id="topbar-actions">
+        <button id="nav-list-btn" class="btn" type="button">All Invoices</button>
+        <button id="nav-profile-btn" class="btn" type="button">Business &amp; Logo</button>
+        <button id="sync-btn" class="btn" type="button">Sync Cloud</button>
+        <button id="new-inv-btn" class="btn btn-primary" type="button">+ New Invoice</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="view-locked" class="locked-box hidden">
+        <h2>Invoices Module Locked</h2>
+        <p>Your current Hopr plan does not include the Invoice Generator module. Enable the <strong>invoices</strong> module from your Hopr Admin Panel to unlock creating, saving PDFs, and sending invoices via WhatsApp.</p>
+      </div>
+
+      <div id="view-list" class="hidden">
+        <div class="card" style="padding:12px 16px;">
+          <input id="search-input" type="text" placeholder="Search by Invoice No, Guest Name, or Phone…" />
+        </div>
+        <div class="card" id="invoices-list" style="padding:0;"></div>
+      </div>
+
+      <div id="view-profile" class="hidden">
+        <div class="card" style="max-width:640px;">
+          <h2 style="margin:0 0 6px;font-size:16px;">Business Profile &amp; Local Logo</h2>
+          <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted);">Business name &amp; contact info sync with your invoices; your logo image stays stored locally on this device only.</p>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+            <img id="prof-logo-preview" src="" alt="" style="max-height:48px;max-width:140px;object-fit:contain;border:1px solid var(--border);border-radius:6px;padding:4px;display:none;" />
+            <button id="pick-logo-btn" class="btn" type="button">Choose Logo Image</button>
+            <button id="clear-logo-btn" class="btn btn-danger" type="button">Remove Logo</button>
+          </div>
+          <div class="grid-2" style="margin-bottom:10px;">
+            <div><label>Business Name</label><input id="prof-name" type="text" placeholder="LODGE KOLATOLI" /></div>
+            <div><label>Top-Right Badge</label><input id="prof-mushok" type="text" placeholder="MUSHOK 6.3" /></div>
+          </div>
+          <div style="margin-bottom:10px;"><label>Address</label><input id="prof-addr" type="text" placeholder="123 Hospitality Lane, Cox's Bazar" /></div>
+          <div class="grid-2" style="margin-bottom:14px;">
+            <div><label>Hotline</label><input id="prof-hotline" type="text" placeholder="+880 1XXX-XXXXXX" /></div>
+            <div><label>Email</label><input id="prof-email" type="email" placeholder="info@example.com" /></div>
+          </div>
+          <button id="save-profile-btn" class="btn btn-primary" type="button">Save Business Profile</button>
+        </div>
+      </div>
+
+      <div id="view-editor" class="editor-split hidden">
+        <div class="editor-form-col">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <strong style="font-size:14px;">Invoice / Reservation Details</strong>
+              <div style="display:flex;gap:6px;">
+                <button id="save-inv-btn" class="btn btn-primary" type="button">Save</button>
+                <button id="pdf-inv-btn" class="btn" type="button">Save PDF</button>
+                <button id="print-inv-btn" class="btn" type="button">Print</button>
+                <button id="wa-inv-btn" class="btn btn-primary" type="button">Send WhatsApp</button>
+              </div>
+            </div>
+            <div class="grid-3" style="margin-bottom:10px;">
+              <div><label>Invoice No</label><input id="f-inv-no" type="text" /></div>
+              <div><label>Form Title</label><input id="f-title" type="text" /></div>
+              <div><label>Currency</label><input id="f-currency" type="text" value="BDT" /></div>
+            </div>
+            <div class="grid-3" style="margin-bottom:10px;">
+              <div><label>Guest ID</label><input id="f-guest-id" type="text" /></div>
+              <div><label>Guest / Group Name</label><input id="f-guest-name" type="text" /></div>
+              <div><label>Phone (for WhatsApp)</label><input id="f-guest-phone" type="text" /></div>
+            </div>
+            <div class="grid-3" style="margin-bottom:10px;">
+              <div><label>Reg. Date</label><input id="f-reg-date" type="text" /></div>
+              <div><label>Source</label><input id="f-source" type="text" /></div>
+              <div><label>Guest Address</label><input id="f-guest-addr" type="text" /></div>
+            </div>
+            <div class="grid-4" style="margin-bottom:10px;">
+              <div><label>Check In</label><input id="f-checkin" type="text" /></div>
+              <div><label>Check Out</label><input id="f-checkout" type="text" /></div>
+              <div><label>Pax</label><input id="f-pax" type="text" /></div>
+              <div><label>Duration</label><input id="f-duration" type="text" /></div>
+            </div>
+            <div class="grid-2" style="margin-bottom:10px;">
+              <div><label>Booked by</label><input id="f-booked-by" type="text" /></div>
+              <div><label>Special Req.</label><input id="f-special-req" type="text" /></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <strong style="font-size:13.5px;">Rooms / Line Items</strong>
+              <button id="add-item-btn" class="btn" type="button">+ Add Row</button>
+            </div>
+            <div id="items-editor"></div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <strong style="font-size:13.5px;">Meal Plan, Extras &amp; Payment</strong>
+              <button id="add-extra-btn" class="btn" type="button">+ Add Extra</button>
+            </div>
+            <div style="margin-bottom:10px;"><label>Meal Plan</label><input id="f-meal" type="text" /></div>
+            <div id="extras-editor" style="margin-bottom:10px;"></div>
+            <div class="grid-3" style="margin-bottom:10px;">
+              <div><label>Discount</label><input id="f-discount" type="number" step="1" /></div>
+              <div><label>Advance Paid</label><input id="f-advance" type="number" step="1" /></div>
+              <div><label>Payment Method</label><input id="f-pay-method" type="text" /></div>
+            </div>
+            <div class="grid-3" style="margin-bottom:10px;">
+              <div><label>Airport Pickup</label><input id="f-pickup" type="text" /></div>
+              <div><label>Airport Drop</label><input id="f-drop" type="text" /></div>
+              <div><label>Entered by</label><input id="f-entered-by" type="text" /></div>
+            </div>
+            <div><label>Amount in Words</label><input id="f-words" type="text" placeholder="e.g. Six Hundred Taka Only" /></div>
+          </div>
+        </div>
+
+        <div class="paper" id="paper-preview"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const post = (payload) => {
+      const raw = JSON.stringify(payload);
+      try {
+        if (window.ipc && window.ipc.postMessage) {
+          window.ipc.postMessage(raw);
+        } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ipc) {
+          window.webkit.messageHandlers.ipc.postMessage(raw);
+        }
+      } catch (_) {}
+    };
+
+    let state = {
+      has_access: true,
+      profile: { business_name: "", address: "", hotline: "", email: "", mushok_badge: "MUSHOK 6.3", logo_data_url: null },
+      invoices: [],
+    };
+    let currentView = "list";
+    let draft = null;
+
+    const showToast = (msg) => {
+      const el = document.getElementById("status-toast");
+      if (!msg) { el.style.display = "none"; return; }
+      el.textContent = msg;
+      el.style.display = "inline-block";
+      setTimeout(() => { el.style.display = "none"; }, 3500);
+    };
+
+    const newBlankInvoice = () => {
+      const now = new Date();
+      const invNo = String(Math.floor(100000 + Math.random() * 900000));
+      return {
+        id: "",
+        invoice_no: invNo,
+        form_title: "RESERVATION FORM (GUEST COPY)",
+        created_at: now.toLocaleString(),
+        guest_id: "GST-" + invNo.slice(0, 4),
+        reg_date: now.toLocaleDateString(),
+        guest_name: "",
+        source: "DIRECT",
+        guest_address: "-",
+        guest_phone: "",
+        check_in: "",
+        check_out: "",
+        pax: "2",
+        duration: "1 Nights",
+        booked_by: "",
+        special_req: "-",
+        items: [{ description: "Couple AC", check_in: "", check_out: "", nights: 1, rooms: 1, rate: 3500 }],
+        meal_plan: "Breakfast Included (BB Plan)",
+        extras: [],
+        discount: 0,
+        advance_paid: 0,
+        payment_method: "DIRECT TO HOTEL · CASH",
+        airport_pickup: "NO",
+        airport_drop: "NO",
+        entered_by: "",
+        currency: "BDT",
+        amount_in_words: "",
+        synced: false,
+      };
+    };
+
+    const setView = (v) => {
+      currentView = v;
+      ["locked", "list", "profile", "editor"].forEach((name) => {
+        document.getElementById("view-" + name).classList.toggle("hidden", name !== v);
+      });
+      document.getElementById("topbar-actions").classList.toggle("hidden", v === "locked");
+    };
+
+    const calcTotals = (inv) => {
+      const roomCharges = (inv.items || []).reduce((s, it) => s + Math.max(1, Number(it.nights) || 1) * Math.max(1, Number(it.rooms) || 1) * (Number(it.rate) || 0), 0);
+      const extrasTotal = (inv.extras || []).reduce((s, ex) => s + (Number(ex.amount) || 0), 0);
+      const discount = Number(inv.discount) || 0;
+      const net = Math.max(0, roomCharges + extrasTotal - discount);
+      const adv = Number(inv.advance_paid) || 0;
+      return {
+        roomCharges,
+        extrasTotal,
+        discount,
+        net,
+        adv,
+        refund: Math.max(0, adv - net),
+        balance: Math.max(0, net - adv),
+      };
+    };
+
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    const renderPreview = () => {
+      if (!draft) return;
+      const p = state.profile || {};
+      const t = calcTotals(draft);
+      const cur = draft.currency === "BDT" ? "৳" : (draft.currency + " ");
+      const fmt = (n) => `${cur}${Math.round(n).toLocaleString()}`;
+
+      document.getElementById("paper-preview").innerHTML = `
+        <div class="paper-top">
+          <div style="width:76px;"></div>
+          <div class="paper-brand">
+            ${p.logo_data_url ? `<img src="${p.logo_data_url}" alt="Logo" />` : ""}
+            <div class="paper-brand-name">${esc(p.business_name || "YOUR BUSINESS NAME")}</div>
+          </div>
+          <div>${p.mushok_badge ? `<span class="mushok-pill">${esc(p.mushok_badge)}</span>` : ""}</div>
+        </div>
+        <div class="paper-meta-bar">
+          <span>${esc(draft.created_at)}</span>
+          <span>Page 1 of 1 &nbsp; <strong>Invoice No: ${esc(draft.invoice_no)}</strong></span>
+        </div>
+        <div class="paper-form-title">${esc(draft.form_title)}</div>
+        <div class="paper-box">
+          <div class="paper-info-grid">
+            <div>
+              <div class="paper-kv"><strong>Guest ID</strong><span>: ${esc(draft.guest_id)}</span></div>
+              <div class="paper-kv"><strong>Reg. Date</strong><span>: ${esc(draft.reg_date)}</span></div>
+              <div class="paper-kv"><strong>Group/Name</strong><span>: ${esc(draft.guest_name)}</span></div>
+              <div class="paper-kv"><strong>Source</strong><span>: ${esc(draft.source)}</span></div>
+              <div class="paper-kv"><strong>Address</strong><span>: ${esc(draft.guest_address)}</span></div>
+              <div class="paper-kv"><strong>Phone</strong><span>: ${esc(draft.guest_phone)}</span></div>
+            </div>
+            <div>
+              <div class="paper-kv"><strong>Check In</strong><span>: ${esc(draft.check_in)}</span></div>
+              <div class="paper-kv"><strong>Check Out</strong><span>: ${esc(draft.check_out)}</span></div>
+              <div class="paper-kv"><strong>Pax</strong><span>: ${esc(draft.pax)}</span></div>
+              <div class="paper-kv"><strong>Duration</strong><span>: ${esc(draft.duration)}</span></div>
+              <div class="paper-kv"><strong>Booked by</strong><span>: ${esc(draft.booked_by)}</span></div>
+            </div>
+          </div>
+          <div class="paper-kv" style="margin-top:6px;border-top:1px solid #e5e7eb;padding-top:4px;">
+            <strong>Special Req.</strong><span>: ${esc(draft.special_req)}</span>
+          </div>
+        </div>
+
+        <table class="paper-table">
+          <thead>
+            <tr>
+              <th>#</th><th>DESCRIPTION</th><th>CHECK IN</th><th>CHECK OUT</th>
+              <th class="num">NIGHT(S)</th><th class="num">ROOM(S)</th><th class="num">RATE</th><th class="num">AMOUNT</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(draft.items || []).map((it, i) => {
+              const amt = Math.max(1, Number(it.nights) || 1) * Math.max(1, Number(it.rooms) || 1) * (Number(it.rate) || 0);
+              return `<tr>
+                <td>${i + 1}</td><td>${esc(it.description)}</td><td>${esc(it.check_in)}</td><td>${esc(it.check_out)}</td>
+                <td class="num">${it.nights}</td><td class="num">${it.rooms}</td>
+                <td class="num">${Math.round(Number(it.rate) || 0).toLocaleString()}</td>
+                <td class="num"><strong>${Math.round(amt).toLocaleString()}</strong></td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+
+        <div class="paper-summary">
+          <div>
+            ${draft.meal_plan ? `<div class="paper-box"><strong>MEAL PLAN:</strong><br/>${esc(draft.meal_plan)}</div>` : ""}
+            <div class="paper-box">
+              <strong>EXTRA SERVICES &amp; LOST/DAMAGED ITEMS:</strong>
+              ${(draft.extras || []).length ? draft.extras.map((ex) => `<div class="fin-row"><span>${esc(ex.label)} ${ex.tag ? `<small>[${esc(ex.tag)}]</small>` : ""}</span><strong>${fmt(ex.amount)}</strong></div>`).join("") : `<div style="color:#6b7280;">None</div>`}
+            </div>
+            ${draft.amount_in_words ? `<div class="paper-box"><strong><em>${esc(draft.amount_in_words)}</em></strong></div>` : ""}
+          </div>
+          <div class="paper-box">
+            <div class="fin-row"><span>Room Charges</span><span>${fmt(t.roomCharges)}</span></div>
+            <div class="fin-row"><span>Add-ons / Services</span><span>+${fmt(t.extrasTotal)}</span></div>
+            <div class="fin-row"><span>Discount</span><span>-${fmt(t.discount)}</span></div>
+            <div class="fin-row bold"><span>Net Payable Amount</span><span>${fmt(t.net)}</span></div>
+            <div class="fin-row"><span>Advance/Deposit Paid<br/><small style="color:#4b5563;">(${esc(draft.payment_method)})</small></span><span>${fmt(t.adv)}</span></div>
+            ${t.refund > 0 ? `<div class="fin-row refund"><span>Refund Due to Guest</span><span>${fmt(t.refund)}</span></div>` : ""}
+            <div class="fin-row bold"><span>Balance Due</span><span>${fmt(t.balance)}</span></div>
+          </div>
+        </div>
+
+        <div class="paper-box" style="display:flex;justify-content:space-between;">
+          <span><strong>Airport Pickup:</strong> ${esc(draft.airport_pickup)}</span>
+          <span><strong>Airport Drop:</strong> ${esc(draft.airport_drop)}</span>
+        </div>
+
+        <div class="paper-sigs">
+          <div class="sig-line">Guest Signature</div>
+          <div class="sig-line">${draft.entered_by ? `Entered by: ${esc(draft.entered_by)}` : "Entered by"}</div>
+          <div class="sig-line">Date &amp; Stamp</div>
+        </div>
+
+        <div class="paper-footer">
+          <strong>${esc(p.business_name || "")}</strong><br/>
+          ${esc(p.address || "")}<br/>
+          ${[p.hotline ? "Hotline: " + esc(p.hotline) : "", p.email ? "E-mail: " + esc(p.email) : ""].filter(Boolean).join(" · ")}
+        </div>
+      `;
+    };
+
+    const renderEditorItems = () => {
+      const wrap = document.getElementById("items-editor");
+      wrap.innerHTML = "";
+      draft.items.forEach((it, idx) => {
+        const row = document.createElement("div");
+        row.className = "grid-4";
+        row.style.marginBottom = "8px";
+        row.innerHTML = `
+          <input data-k="description" placeholder="Description" value="${esc(it.description)}" />
+          <input data-k="nights" type="number" min="1" placeholder="Nights" value="${it.nights}" />
+          <input data-k="rooms" type="number" min="1" placeholder="Rooms" value="${it.rooms}" />
+          <div style="display:flex;gap:4px;">
+            <input data-k="rate" type="number" placeholder="Rate" value="${it.rate}" />
+            ${draft.items.length > 1 ? `<button type="button" class="btn btn-danger" style="padding:0 8px;">×</button>` : ""}
+          </div>
+        `;
+        row.querySelectorAll("input").forEach((inp) => {
+          inp.addEventListener("input", () => {
+            const k = inp.dataset.k;
+            it[k] = (k === "description") ? inp.value : (Number(inp.value) || 0);
+            renderPreview();
+          });
+        });
+        const del = row.querySelector("button");
+        if (del) del.addEventListener("click", () => { draft.items.splice(idx, 1); renderEditorItems(); renderPreview(); });
+        wrap.appendChild(row);
+      });
+
+      const exWrap = document.getElementById("extras-editor");
+      exWrap.innerHTML = "";
+      draft.extras.forEach((ex, idx) => {
+        const row = document.createElement("div");
+        row.className = "grid-3";
+        row.style.marginBottom = "6px";
+        row.innerHTML = `
+          <input data-k="label" placeholder="Item (e.g. extra bed)" value="${esc(ex.label)}" />
+          <input data-k="tag" placeholder="Tag (e.g. Room 102)" value="${esc(ex.tag)}" />
+          <div style="display:flex;gap:4px;">
+            <input data-k="amount" type="number" placeholder="Amount" value="${ex.amount}" />
+            <button type="button" class="btn btn-danger" style="padding:0 8px;">×</button>
+          </div>
+        `;
+        row.querySelectorAll("input").forEach((inp) => {
+          inp.addEventListener("input", () => {
+            const k = inp.dataset.k;
+            ex[k] = k === "amount" ? (Number(inp.value) || 0) : inp.value;
+            renderPreview();
+          });
+        });
+        row.querySelector("button").addEventListener("click", () => { draft.extras.splice(idx, 1); renderEditorItems(); renderPreview(); });
+        exWrap.appendChild(row);
+      });
+    };
+
+    const bindField = (id, key, isNum) => {
+      const el = document.getElementById(id);
+      el.value = draft[key] ?? "";
+      el.oninput = () => {
+        draft[key] = isNum ? (Number(el.value) || 0) : el.value;
+        renderPreview();
+      };
+    };
+
+    const openEditor = (inv) => {
+      draft = JSON.parse(JSON.stringify(inv));
+      bindField("f-inv-no", "invoice_no");
+      bindField("f-title", "form_title");
+      bindField("f-currency", "currency");
+      bindField("f-guest-id", "guest_id");
+      bindField("f-guest-name", "guest_name");
+      bindField("f-guest-phone", "guest_phone");
+      bindField("f-reg-date", "reg_date");
+      bindField("f-source", "source");
+      bindField("f-guest-addr", "guest_address");
+      bindField("f-checkin", "check_in");
+      bindField("f-checkout", "check_out");
+      bindField("f-pax", "pax");
+      bindField("f-duration", "duration");
+      bindField("f-booked-by", "booked_by");
+      bindField("f-special-req", "special_req");
+      bindField("f-meal", "meal_plan");
+      bindField("f-discount", "discount", true);
+      bindField("f-advance", "advance_paid", true);
+      bindField("f-pay-method", "payment_method");
+      bindField("f-pickup", "airport_pickup");
+      bindField("f-drop", "airport_drop");
+      bindField("f-entered-by", "entered_by");
+      bindField("f-words", "amount_in_words");
+      renderEditorItems();
+      renderPreview();
+      setView("editor");
+    };
+
+    const renderList = () => {
+      const q = (document.getElementById("search-input").value || "").trim().toLowerCase();
+      const wrap = document.getElementById("invoices-list");
+      const items = (state.invoices || []).filter((inv) => {
+        if (!q) return true;
+        return (inv.invoice_no + " " + inv.guest_name + " " + inv.guest_phone).toLowerCase().includes(q);
+      });
+      if (!items.length) {
+        wrap.innerHTML = `<div style="padding:28px;text-align:center;color:var(--muted);">No invoices yet. Click <strong>+ New Invoice</strong> to create one.</div>`;
+        return;
+      }
+      wrap.innerHTML = "";
+      for (const inv of items) {
+        const t = calcTotals(inv);
+        const row = document.createElement("div");
+        row.className = "inv-list-row";
+        row.innerHTML = `
+          <div>
+            <div class="inv-title">#${esc(inv.invoice_no)} — ${esc(inv.guest_name || "Guest")}</div>
+            <div class="inv-sub">${esc(inv.guest_phone || "")} · Net: ${esc(inv.currency)} ${Math.round(t.net)} · ${inv.synced ? "Synced" : "Local"}</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="btn edit-btn">Open</button>
+            <button type="button" class="btn pdf-btn">PDF</button>
+            <button type="button" class="btn wa-btn">WhatsApp</button>
+            <button type="button" class="btn btn-danger del-btn">Delete</button>
+          </div>
+        `;
+        row.querySelector(".edit-btn").addEventListener("click", () => openEditor(inv));
+        row.querySelector(".pdf-btn").addEventListener("click", () => post({ type: "export_invoice_pdf", invoice: inv }));
+        row.querySelector(".wa-btn").addEventListener("click", () => post({ type: "send_invoice_whatsapp", invoice: inv }));
+        row.querySelector(".del-btn").addEventListener("click", () => post({ type: "delete_invoice", id: inv.id }));
+        wrap.appendChild(row);
+      }
+    };
+
+    const renderProfile = () => {
+      const p = state.profile || {};
+      document.getElementById("prof-name").value = p.business_name || "";
+      document.getElementById("prof-mushok").value = p.mushok_badge || "MUSHOK 6.3";
+      document.getElementById("prof-addr").value = p.address || "";
+      document.getElementById("prof-hotline").value = p.hotline || "";
+      document.getElementById("prof-email").value = p.email || "";
+      const img = document.getElementById("prof-logo-preview");
+      if (p.logo_data_url) { img.src = p.logo_data_url; img.style.display = "block"; }
+      else { img.style.display = "none"; }
+    };
+
+    document.getElementById("search-input").addEventListener("input", renderList);
+    document.getElementById("nav-list-btn").addEventListener("click", () => { renderList(); setView("list"); });
+    document.getElementById("nav-profile-btn").addEventListener("click", () => { renderProfile(); setView("profile"); });
+    document.getElementById("sync-btn").addEventListener("click", () => post({ type: "sync_invoices" }));
+    document.getElementById("new-inv-btn").addEventListener("click", () => openEditor(newBlankInvoice()));
+    document.getElementById("add-item-btn").addEventListener("click", () => {
+      draft.items.push({ description: "", check_in: draft.check_in, check_out: draft.check_out, nights: 1, rooms: 1, rate: 0 });
+      renderEditorItems(); renderPreview();
+    });
+    document.getElementById("add-extra-btn").addEventListener("click", () => {
+      draft.extras.push({ label: "", tag: "", amount: 0 });
+      renderEditorItems(); renderPreview();
+    });
+    document.getElementById("save-inv-btn").addEventListener("click", () => post({ type: "save_invoice", invoice: draft }));
+    document.getElementById("pdf-inv-btn").addEventListener("click", () => post({ type: "export_invoice_pdf", invoice: draft }));
+    document.getElementById("print-inv-btn").addEventListener("click", () => window.print());
+    document.getElementById("wa-inv-btn").addEventListener("click", () => post({ type: "send_invoice_whatsapp", invoice: draft }));
+    document.getElementById("pick-logo-btn").addEventListener("click", () => post({ type: "pick_invoice_logo" }));
+    document.getElementById("clear-logo-btn").addEventListener("click", () => {
+      state.profile.logo_data_url = null;
+      post({ type: "save_invoice_profile", profile: state.profile });
+      renderProfile();
+    });
+    document.getElementById("save-profile-btn").addEventListener("click", () => {
+      state.profile.business_name = document.getElementById("prof-name").value.trim();
+      state.profile.mushok_badge = document.getElementById("prof-mushok").value.trim();
+      state.profile.address = document.getElementById("prof-addr").value.trim();
+      state.profile.hotline = document.getElementById("prof-hotline").value.trim();
+      state.profile.email = document.getElementById("prof-email").value.trim();
+      post({ type: "save_invoice_profile", profile: state.profile });
+    });
+
+    window.__HOPR_INVOICES_STATE__ = (next) => {
+      state = next;
+      if (next.toast) showToast(next.toast);
+      if (!next.has_access) { setView("locked"); return; }
+      renderProfile();
+      if (currentView === "locked") setView("list");
+      if (currentView === "list") renderList();
+      if (currentView === "editor" && draft) {
+        const updated = (next.invoices || []).find((x) => x.id === draft.id || x.invoice_no === draft.invoice_no);
+        if (updated) draft = JSON.parse(JSON.stringify(updated));
+        renderPreview();
+      }
+    };
+
+    post({ type: "invoices_ready" });
+  </script>
+</body>
+</html>

@@ -1,13 +1,10 @@
 use crate::config::{AccountConfig, AppConfig};
-#[cfg(target_os = "macos")]
-use crate::platform::downloads_dir;
 use crate::platform::{is_low_power_mode, open_external_url};
 #[cfg(target_os = "macos")]
 use objc2::rc::Weak;
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
-#[cfg(target_os = "macos")]
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -43,6 +40,8 @@ pub enum AppEvent {
     UiIpc {
         body: String,
     },
+    AuthResult(crate::auth::AuthOutcome),
+    InvoiceResult(crate::invoices::InvoiceOutcome),
     LifecycleTick,
     FocusWindow,
     #[cfg(debug_assertions)]
@@ -504,12 +503,7 @@ impl WebViewManager {
                 wry::NewWindowResponse::Deny
             })
             .with_download_started_handler(move |url, dest| {
-                let filename = Path::new(url.split('?').next().unwrap_or("download"))
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("whatsapp-download");
-                *dest = downloads_dir().join(filename);
+                *dest = resolve_download_dest(dest, &url);
                 dl_counter_start.fetch_add(1, Ordering::Relaxed);
                 true
             })
@@ -734,6 +728,17 @@ impl WebViewManager {
         }
     }
 
+    pub fn load_url_on_active(&self, url: &str) -> bool {
+        if let Some(id) = self.active_id
+            && let Some(rt) = self.runtimes.get(&id)
+            && let Some(wv) = &rt.webview
+        {
+            let _ = wv.load_url(url);
+            return true;
+        }
+        false
+    }
+
     pub fn account_views<'a>(
         &self,
         accounts: &'a [AccountConfig],
@@ -877,6 +882,56 @@ pub fn teardown_webview(wv: WebView, label: &str) {
     }
 }
 
+pub fn resolve_download_dest(suggested: &std::path::Path, url: &str) -> PathBuf {
+    resolve_download_dest_in(suggested, url, &crate::platform::downloads_dir())
+}
+
+fn resolve_download_dest_in(
+    suggested: &std::path::Path,
+    url: &str,
+    dir: &std::path::Path,
+) -> PathBuf {
+    let raw_name = suggested
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            std::path::Path::new(url.split('?').next().unwrap_or("download"))
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+        })
+        .unwrap_or("whatsapp-download");
+
+    let safe_name = raw_name.replace(['/', '\\', '\0'], "_");
+    let candidate = dir.join(&safe_name);
+    if !candidate.exists() {
+        return candidate;
+    }
+
+    let path = std::path::Path::new(&safe_name);
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("whatsapp-download");
+    let ext = path.extension().and_then(|s| s.to_str());
+
+    for n in 1..1000 {
+        let next_name = match ext {
+            Some(e) if !e.is_empty() => format!("{stem} ({n}).{e}"),
+            _ => format!("{stem} ({n})"),
+        };
+        let next = dir.join(next_name);
+        if !next.exists() {
+            return next;
+        }
+    }
+    candidate
+}
+
 pub fn is_trusted_ipc_origin(origin: &str) -> bool {
     origin == "https://web.whatsapp.com"
         || origin.starts_with("https://web.whatsapp.com/")
@@ -939,5 +994,20 @@ mod tests {
             assert!(rl.allow());
         }
         assert!(!rl.allow());
+    }
+
+    #[test]
+    fn download_dest_preserves_suggested_filename_over_blob_url() {
+        let tmp = std::env::temp_dir().join(format!("hopr-dl-test-{}", Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&tmp);
+        let blob_url = "blob:https://web.whatsapp.com/8f3a1c2d-1234-5678-9abc-def012345678";
+        let suggested = PathBuf::from("/tmp/invoice-2026.pdf");
+        let dest = resolve_download_dest_in(&suggested, blob_url, &tmp);
+        assert_eq!(dest, tmp.join("invoice-2026.pdf"));
+
+        std::fs::write(&dest, b"pdf").unwrap();
+        let dest2 = resolve_download_dest_in(&suggested, blob_url, &tmp);
+        assert_eq!(dest2, tmp.join("invoice-2026 (1).pdf"));
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

@@ -1,7 +1,9 @@
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
+mod auth;
 mod config;
 mod instance;
+mod invoices;
 #[cfg(target_os = "macos")]
 mod macos;
 mod menu;
@@ -112,6 +114,22 @@ enum UiIpcMsg {
     ToggleQuitOnClose,
     ToggleLaunchAtLogin,
     CheckForUpdates,
+    AuthReady,
+    AuthLogin { email: String, password: String },
+    AuthSignup { name: String, phone: String, email: String, password: String },
+    AuthVerifyOtp { email: String, otp: String },
+    AuthResendOtp { email: String },
+    AuthCheckSession,
+    AuthLogout,
+    ToggleInvoices,
+    InvoicesReady,
+    SaveInvoiceProfile { profile: invoices::InvoiceBusinessProfile },
+    SaveInvoice { invoice: invoices::InvoiceRecord },
+    DeleteInvoice { id: String },
+    SyncInvoices,
+    ExportInvoicePdf { invoice: invoices::InvoiceRecord },
+    SendInvoiceWhatsApp { invoice: invoices::InvoiceRecord },
+    PickInvoiceLogo,
 }
 
 #[derive(Serialize)]
@@ -120,6 +138,7 @@ struct UiStatePayload<'a> {
     reminders: &'a [Reminder],
     collapsed_groups: &'a [String],
     settings_open: bool,
+    invoices_open: bool,
     show_message_previews: bool,
     dock_badge_enabled: bool,
     hibernate_after_mins: u64,
@@ -129,6 +148,7 @@ struct UiStatePayload<'a> {
     launch_at_login: bool,
     has_lock_pin: bool,
     can_biometric: bool,
+    auth_user: Option<&'a auth::AuthUser>,
 }
 
 struct LayoutRects {
@@ -180,6 +200,56 @@ fn reset_last_ui_json() {
     LAST_UI_JSON.with(|cell| cell.borrow_mut().clear());
 }
 
+fn full_window_rect(window: &Window) -> Rect {
+    let scale = window.scale_factor();
+    let size = window.inner_size().to_logical::<f64>(scale);
+    Rect {
+        position: LogicalPosition::new(0.0, 0.0).into(),
+        size: LogicalSize::new(size.width.max(320.0), size.height.max(200.0)).into(),
+    }
+}
+
+fn push_auth_state(
+    auth_wv: Option<&WebView>,
+    view: &str,
+    email: Option<&str>,
+    message: Option<&str>,
+    is_error: bool,
+    start_cooldown: bool,
+    cooldown_secs: u64,
+) {
+    let Some(awv) = auth_wv else { return };
+    let payload = serde_json::json!({
+        "view": view,
+        "email": email.unwrap_or(""),
+        "message": message.unwrap_or(""),
+        "is_error": is_error,
+        "start_cooldown": start_cooldown,
+        "cooldown_secs": cooldown_secs,
+    });
+    let script = format!("window.__HOPR_AUTH_STATE__ && window.__HOPR_AUTH_STATE__({payload});");
+    let _ = awv.evaluate_script(&script);
+}
+
+fn push_invoices_state(
+    invoices_wv: Option<&WebView>,
+    auth_user: Option<&auth::AuthUser>,
+    store: &invoices::LocalInvoiceStore,
+    toast: Option<&str>,
+) {
+    let Some(iwv) = invoices_wv else { return };
+    let has_access = auth_user
+        .is_some_and(|u| u.has_module("invoices") || u.has_module("invoice"));
+    let payload = serde_json::json!({
+        "has_access": has_access,
+        "profile": store.profile,
+        "invoices": store.invoices,
+        "toast": toast.unwrap_or(""),
+    });
+    let script = format!("window.__HOPR_INVOICES_STATE__ && window.__HOPR_INVOICES_STATE__({payload});");
+    let _ = iwv.evaluate_script(&script);
+}
+
 fn sync_ui(
     sidebar: &WebView,
     settings_wv: Option<&WebView>,
@@ -188,6 +258,7 @@ fn sync_ui(
     cfg: &AppConfig,
     manager: &WebViewManager,
     settings_open: bool,
+    auth_user: Option<&auth::AuthUser>,
 ) {
     menu_ids.sync_account_menu(&cfg.accounts);
     let views = manager.account_views(
@@ -208,6 +279,7 @@ fn sync_ui(
         reminders: &cfg.reminders,
         collapsed_groups: &cfg.collapsed_groups,
         settings_open,
+        invoices_open: false,
         show_message_previews: cfg.show_message_previews,
         dock_badge_enabled: cfg.dock_badge_enabled,
         hibernate_after_mins: cfg.hibernate_after_mins,
@@ -217,6 +289,7 @@ fn sync_ui(
         launch_at_login: cfg.launch_at_login,
         has_lock_pin: cfg.has_lock_pin(),
         can_biometric: can_authenticate_biometric(),
+        auth_user,
     };
 
     if let Ok(json) = serde_json::to_string(&payload) {
@@ -531,60 +604,38 @@ fn main() {
     let sidebar = build_ui_webview(
         include_str!("../assets/sidebar.html"),
         rects.sidebar,
-        true,
+        false,
         &window,
         &proxy,
     );
     let mut settings_wv: Option<WebView> = None;
+    let mut invoices_open = false;
+    let mut invoices_wv: Option<WebView> = None;
+    let mut invoice_store = invoices::LocalInvoiceStore::default();
     let mut lock_wv: Option<WebView> = None;
+    let mut auth_user: Option<auth::AuthUser> = None;
+    let mut auth_view = if auth::get_stored_token().is_some() {
+        "verifying".to_string()
+    } else {
+        "login".to_string()
+    };
+    let mut auth_email = String::new();
+    let mut auth_msg = String::new();
+    let mut auth_is_err = false;
+    let mut auth_wv: Option<WebView> = Some(build_ui_webview(
+        include_str!("../assets/auth.html"),
+        full_window_rect(&window),
+        true,
+        &window,
+        &proxy,
+    ));
     let mut session_unlocked: HashSet<Uuid> = HashSet::new();
     let mut locked_target: Option<Uuid> = None;
     let mut lock_error: Option<String> = None;
 
-    // Cold start: draw sidebar immediately, load only active account first (unless launched hidden),
-    // then stagger remaining Always Connected accounts.
-    let initial_id = if start_hidden {
-        None
-    } else {
-        cfg.active_account
-            .filter(|id| !cfg.get(*id).map(|a| a.locked).unwrap_or(false))
-            .or_else(|| cfg.accounts.iter().find(|a| !a.locked).map(|a| a.id))
-    };
-
-    if let Some(id) = initial_id
-        && let Err(err) = manager.switch_to(
-            id,
-            &cfg.accounts,
-            &window,
-            &proxy,
-            rects.content,
-            cfg.max_live_webviews,
-            true,
-        )
-    {
-        eprintln!("[hopr] Failed to load initial account: error={err}");
-    } else if initial_id.is_none() && !start_hidden {
-        if let Some(first_locked) = cfg
-            .active_account
-            .or_else(|| cfg.accounts.first().map(|a| a.id))
-            && cfg.get(first_locked).is_some_and(|a| a.locked)
-        {
-            locked_target = Some(first_locked);
-            refresh_content_layer(
-                settings_open,
-                &window,
-                &proxy,
-                &mut settings_wv,
-                &mut lock_wv,
-                &mut locked_target,
-                &mut lock_error,
-                &cfg,
-                &manager,
-                &session_unlocked,
-            );
-        }
+    if let Some(tok) = auth::get_stored_token() {
+        auth::spawn_check_session(proxy.clone(), tok);
     }
-    manager.queue_cold_start_staggered(&cfg.accounts, initial_id);
 
     sync_ui(
         &sidebar,
@@ -594,6 +645,7 @@ fn main() {
         &cfg,
         &manager,
         settings_open,
+        auth_user.as_ref(),
     );
     spawn_lifecycle_ticker(proxy.clone());
 
@@ -688,6 +740,7 @@ fn main() {
                             &cfg,
                             &manager,
                             settings_open,
+                            auth_user.as_ref(),
                         );
                     }
                     pending_ctx = None;
@@ -704,6 +757,7 @@ fn main() {
                         &cfg,
                         &manager,
                         settings_open,
+                        auth_user.as_ref(),
                     );
                     pending_ctx = None;
                     continue;
@@ -718,6 +772,7 @@ fn main() {
                         &cfg,
                         &manager,
                         settings_open,
+                        auth_user.as_ref(),
                     );
                     pending_ctx = None;
                     continue;
@@ -731,6 +786,7 @@ fn main() {
                         &cfg,
                         &manager,
                         settings_open,
+                        auth_user.as_ref(),
                     );
                     pending_ctx = None;
                     continue;
@@ -739,6 +795,35 @@ fn main() {
             if menu_evt.id == menu_ids.check_for_updates {
                 sparkle.check_for_updates();
             } else if menu_evt.id == menu_ids.new_account {
+                if auth_user
+                    .as_ref()
+                    .is_some_and(|u| !u.can_add_account(cfg.accounts.len()))
+                {
+                    settings_open = true;
+                    refresh_content_layer(
+                        settings_open,
+                        &window,
+                        &proxy,
+                        &mut settings_wv,
+                        &mut lock_wv,
+                        &mut locked_target,
+                        &mut lock_error,
+                        &cfg,
+                        &manager,
+                        &session_unlocked,
+                    );
+                    sync_ui(
+                        &sidebar,
+                        settings_wv.as_ref(),
+                        &menu_ids,
+                        tray_icon.as_ref(),
+                        &cfg,
+                        &manager,
+                        settings_open,
+                        auth_user.as_ref(),
+                    );
+                    continue;
+                }
                 let new_id = cfg.add_account().id;
                 cfg.active_account = Some(new_id);
                 let _ = cfg.save();
@@ -762,6 +847,7 @@ fn main() {
                     &cfg,
                     &manager,
                     settings_open,
+                    auth_user.as_ref(),
                 );
             } else if menu_evt.id == menu_ids.hibernate_inactive {
                 manager.hibernate_all_inactive();
@@ -773,6 +859,7 @@ fn main() {
                     &cfg,
                     &manager,
                     settings_open,
+                    auth_user.as_ref(),
                 );
             } else if menu_evt.id == menu_ids.toggle_mute {
                 if let Some(active) = manager.active_id() {
@@ -785,6 +872,7 @@ fn main() {
                         &cfg,
                         &manager,
                         settings_open,
+                        auth_user.as_ref(),
                     );
                 }
             } else if menu_evt.id == menu_ids.open_settings {
@@ -809,6 +897,7 @@ fn main() {
                     &cfg,
                     &manager,
                     settings_open,
+                    auth_user.as_ref(),
                 );
             } else if menu_evt.id == menu_ids.tray_show {
                 unhide_and_activate_application();
@@ -844,6 +933,7 @@ fn main() {
                     &cfg,
                     &manager,
                     settings_open,
+                    auth_user.as_ref(),
                 );
             } else if menu_evt.id == menu_ids.close_window {
                 if cfg.quit_on_close {
@@ -882,6 +972,7 @@ fn main() {
                         &cfg,
                         &manager,
                         settings_open,
+                        auth_user.as_ref(),
                     );
                 }
             } else if menu_evt.id == menu_ids.tray_quit {
@@ -941,6 +1032,7 @@ fn main() {
                     &cfg,
                     &manager,
                     settings_open,
+                    auth_user.as_ref(),
                 );
             }
         }
@@ -986,6 +1078,7 @@ fn main() {
                         &cfg,
                         &manager,
                         settings_open,
+                        auth_user.as_ref(),
                     );
                 }
             }
@@ -994,9 +1087,15 @@ fn main() {
                 ..
             } => {
                 let rects = layout_rects(&window);
+                if let Some(awv) = &auth_wv {
+                    let _ = awv.set_bounds(full_window_rect(&window));
+                }
                 let _ = sidebar.set_bounds(rects.sidebar);
                 if let Some(swv) = &settings_wv {
                     let _ = swv.set_bounds(rects.settings);
+                }
+                if let Some(iwv) = &invoices_wv {
+                    let _ = iwv.set_bounds(rects.settings);
                 }
                 if let Some(lwv) = &lock_wv {
                     let _ = lwv.set_bounds(rects.content);
@@ -1038,6 +1137,7 @@ fn main() {
                         &cfg,
                         &manager,
                         settings_open,
+                        auth_user.as_ref(),
                     );
                 } else if !focused && window.is_minimized() {
                     session_unlocked.clear();
@@ -1067,6 +1167,7 @@ fn main() {
                         &cfg,
                         &manager,
                         settings_open,
+                        auth_user.as_ref(),
                     );
                 }
             }
@@ -1110,6 +1211,7 @@ fn main() {
                         &cfg,
                         &manager,
                         settings_open,
+                        auth_user.as_ref(),
                     );
                 }
             }
@@ -1203,6 +1305,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             WebViewIpcMsg::Notif { title, body, .. } => {
@@ -1240,6 +1343,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             WebViewIpcMsg::Network { online } => {
@@ -1252,6 +1356,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             WebViewIpcMsg::Profile {
@@ -1268,6 +1373,7 @@ fn main() {
                                         &cfg,
                                         &manager,
                                         settings_open,
+                                        auth_user.as_ref(),
                                     );
                                 }
                             }
@@ -1278,6 +1384,10 @@ fn main() {
                     if let Ok(msg) = serde_json::from_str::<UiIpcMsg>(&body) {
                         match msg {
                             UiIpcMsg::SwitchAccount { id } => {
+                                invoices_open = false;
+                                if let Some(iwv) = invoices_wv.take() {
+                                    teardown_webview(iwv, "invoices");
+                                }
                                 if let Some(prev_id) = manager.active_id()
                                     && prev_id != id
                                 {
@@ -1326,6 +1436,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::HibernateAccount { id } => {
@@ -1338,6 +1449,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::AccountContextMenu { id, x, y } => {
@@ -1356,9 +1468,26 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::AddAccount => {
+                                if auth_user
+                                    .as_ref()
+                                    .is_some_and(|u| !u.can_add_account(cfg.accounts.len()))
+                                {
+                                    sync_ui(
+                                        &sidebar,
+                                        settings_wv.as_ref(),
+                                        &menu_ids,
+                                        tray_icon.as_ref(),
+                                        &cfg,
+                                        &manager,
+                                        settings_open,
+                                        auth_user.as_ref(),
+                                    );
+                                    return;
+                                }
                                 let new_id = cfg.add_account().id;
                                 cfg.active_account = Some(new_id);
                                 let _ = cfg.save();
@@ -1388,6 +1517,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::RemoveAccount { id } => {
@@ -1419,6 +1549,7 @@ fn main() {
                                         &cfg,
                                         &manager,
                                         settings_open,
+                                        auth_user.as_ref(),
                                     );
                                 }
                             }
@@ -1432,6 +1563,7 @@ fn main() {
                                         &cfg,
                                         &manager,
                                         settings_open,
+                                        auth_user.as_ref(),
                                     );
                                 }
                             }
@@ -1445,6 +1577,7 @@ fn main() {
                                         &cfg,
                                         &manager,
                                         settings_open,
+                                        auth_user.as_ref(),
                                     );
                                 }
                             }
@@ -1461,6 +1594,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::RenameAccount { id, name } => {
@@ -1473,6 +1607,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::CycleNotifSound { id } => {
@@ -1486,6 +1621,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::SetNotifSound { id, sound } => {
@@ -1499,6 +1635,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::SetGroup { id, group } => {
@@ -1511,6 +1648,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::ToggleAccountLock { id } => {
@@ -1577,6 +1715,7 @@ fn main() {
                                         &cfg,
                                         &manager,
                                         settings_open,
+                                        auth_user.as_ref(),
                                     );
                                 }
                             }
@@ -1625,6 +1764,7 @@ fn main() {
                                         &cfg,
                                         &manager,
                                         settings_open,
+                                        auth_user.as_ref(),
                                     );
                                 } else {
                                     lock_error = Some("Incorrect PIN".to_string());
@@ -1677,6 +1817,7 @@ fn main() {
                                         &cfg,
                                         &manager,
                                         settings_open,
+                                        auth_user.as_ref(),
                                     );
                                 } else {
                                     lock_error = Some("Touch ID authentication failed".to_string());
@@ -1720,6 +1861,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::ClearLockPin { current_pin } => {
@@ -1750,6 +1892,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::AddReminder {
@@ -1766,6 +1909,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::RemoveReminder { id } => {
@@ -1778,6 +1922,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::PickCustomAvatar { id } => {
@@ -1791,6 +1936,7 @@ fn main() {
                                         &cfg,
                                         &manager,
                                         settings_open,
+                                        auth_user.as_ref(),
                                     );
                                 }
                             }
@@ -1804,9 +1950,14 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::ToggleSettings => {
+                                invoices_open = false;
+                                if let Some(iwv) = invoices_wv.take() {
+                                    teardown_webview(iwv, "invoices");
+                                }
                                 settings_open = !settings_open;
                                 refresh_content_layer(
                                     settings_open,
@@ -1828,6 +1979,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::CloseSettings => {
@@ -1852,6 +2004,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::SidebarReady | UiIpcMsg::SettingsReady => {
@@ -1864,6 +2017,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::TogglePreviews => {
@@ -1877,6 +2031,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::ToggleDockBadge => {
@@ -1890,6 +2045,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::CycleHibernateMins => {
@@ -1908,6 +2064,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::SetHibernateMins { mins } => {
@@ -1921,6 +2078,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::CycleMaxLive => {
@@ -1940,6 +2098,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::SetMaxLive { max_live } => {
@@ -1953,10 +2112,267 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::CheckForUpdates => {
                                 sparkle.check_for_updates();
+                            }
+                            UiIpcMsg::AuthReady => {
+                                push_auth_state(
+                                    auth_wv.as_ref(),
+                                    &auth_view,
+                                    Some(&auth_email),
+                                    Some(&auth_msg),
+                                    auth_is_err,
+                                    false,
+                                    0,
+                                );
+                            }
+                            UiIpcMsg::AuthLogin { email, password } => {
+                                auth_email = email.trim().to_string();
+                                auth::spawn_login(proxy.clone(), email, password);
+                            }
+                            UiIpcMsg::AuthSignup {
+                                name,
+                                phone,
+                                email,
+                                password,
+                            } => {
+                                auth_email = email.trim().to_string();
+                                auth::spawn_signup(proxy.clone(), name, phone, email, password);
+                            }
+                            UiIpcMsg::AuthVerifyOtp { email, otp } => {
+                                auth_email = email.trim().to_string();
+                                auth::spawn_verify_otp(proxy.clone(), email, otp);
+                            }
+                            UiIpcMsg::AuthResendOtp { email } => {
+                                auth_email = email.trim().to_string();
+                                auth::spawn_resend_otp(proxy.clone(), email);
+                            }
+                            UiIpcMsg::AuthCheckSession => {
+                                if let Some(tok) = auth::get_stored_token() {
+                                    auth::spawn_check_session(proxy.clone(), tok);
+                                } else {
+                                    auth_view = "login".to_string();
+                                    push_auth_state(
+                                        auth_wv.as_ref(),
+                                        &auth_view,
+                                        Some(&auth_email),
+                                        Some("Please sign in first."),
+                                        true,
+                                        false,
+                                        0,
+                                    );
+                                }
+                            }
+                            UiIpcMsg::AuthLogout => {
+                                auth::spawn_logout(proxy.clone());
+                            }
+                            UiIpcMsg::ToggleInvoices => {
+                                invoices_open = !invoices_open;
+                                if invoices_open {
+                                    settings_open = false;
+                                    if let Some(swv) = settings_wv.take() {
+                                        teardown_webview(swv, "settings");
+                                    }
+                                    if let Some(lwv) = lock_wv.take() {
+                                        teardown_webview(lwv, "lock");
+                                    }
+                                    manager.set_active_visible(false);
+                                    if invoices_wv.is_none() {
+                                        let rects = layout_rects(&window);
+                                        invoices_wv = Some(build_ui_webview(
+                                            include_str!("../assets/invoices.html"),
+                                            rects.settings,
+                                            true,
+                                            &window,
+                                            &proxy,
+                                        ));
+                                    }
+                                    if !invoice_store.has_initial_sync
+                                        && auth_user.as_ref().is_some_and(|u| {
+                                            u.has_module("invoices") || u.has_module("invoice")
+                                        })
+                                        && let Some(tok) = auth::get_stored_token()
+                                    {
+                                        invoices::spawn_fetch_invoices(proxy.clone(), tok);
+                                    }
+                                } else {
+                                    if let Some(iwv) = invoices_wv.take() {
+                                        teardown_webview(iwv, "invoices");
+                                    }
+                                    refresh_content_layer(
+                                        settings_open,
+                                        &window,
+                                        &proxy,
+                                        &mut settings_wv,
+                                        &mut lock_wv,
+                                        &mut locked_target,
+                                        &mut lock_error,
+                                        &cfg,
+                                        &manager,
+                                        &session_unlocked,
+                                    );
+                                }
+                                reset_last_ui_json();
+                                sync_ui(
+                                    &sidebar,
+                                    settings_wv.as_ref(),
+                                    &menu_ids,
+                                    tray_icon.as_ref(),
+                                    &cfg,
+                                    &manager,
+                                    settings_open,
+                                    auth_user.as_ref(),
+                                );
+                            }
+                            UiIpcMsg::InvoicesReady => {
+                                push_invoices_state(
+                                    invoices_wv.as_ref(),
+                                    auth_user.as_ref(),
+                                    &invoice_store,
+                                    None,
+                                );
+                            }
+                            UiIpcMsg::SaveInvoiceProfile { profile } => {
+                                invoice_store.profile = profile;
+                                if let Some(u) = auth_user.as_ref() {
+                                    invoice_store.save(u.id);
+                                }
+                                push_invoices_state(
+                                    invoices_wv.as_ref(),
+                                    auth_user.as_ref(),
+                                    &invoice_store,
+                                    Some("Business profile saved."),
+                                );
+                            }
+                            UiIpcMsg::SaveInvoice { invoice } => {
+                                if !auth_user.as_ref().is_some_and(|u| {
+                                    u.has_module("invoices") || u.has_module("invoice")
+                                }) {
+                                    return;
+                                }
+                                let saved = invoice_store.upsert_invoice(invoice);
+                                if let Some(u) = auth_user.as_ref() {
+                                    invoice_store.save(u.id);
+                                }
+                                push_invoices_state(
+                                    invoices_wv.as_ref(),
+                                    auth_user.as_ref(),
+                                    &invoice_store,
+                                    Some("Saved locally."),
+                                );
+                                if let Some(tok) = auth::get_stored_token() {
+                                    invoices::spawn_save_invoice(
+                                        proxy.clone(),
+                                        tok,
+                                        invoice_store.profile.business_name.clone(),
+                                        saved,
+                                    );
+                                }
+                            }
+                            UiIpcMsg::DeleteInvoice { id } => {
+                                if invoice_store.remove_invoice(&id) {
+                                    if let Some(u) = auth_user.as_ref() {
+                                        invoice_store.save(u.id);
+                                    }
+                                    if let Some(tok) = auth::get_stored_token() {
+                                        invoices::spawn_delete_invoice(proxy.clone(), tok, id);
+                                    }
+                                    push_invoices_state(
+                                        invoices_wv.as_ref(),
+                                        auth_user.as_ref(),
+                                        &invoice_store,
+                                        Some("Invoice deleted."),
+                                    );
+                                }
+                            }
+                            UiIpcMsg::SyncInvoices => {
+                                if auth_user.as_ref().is_some_and(|u| {
+                                    u.has_module("invoices") || u.has_module("invoice")
+                                }) && let Some(tok) = auth::get_stored_token()
+                                {
+                                    invoices::spawn_fetch_invoices(proxy.clone(), tok);
+                                    push_invoices_state(
+                                        invoices_wv.as_ref(),
+                                        auth_user.as_ref(),
+                                        &invoice_store,
+                                        Some("Syncing from cloud…"),
+                                    );
+                                }
+                            }
+                            UiIpcMsg::ExportInvoicePdf { invoice } => {
+                                let msg = match invoices::export_invoice_pdf(
+                                    &invoice,
+                                    &invoice_store.profile,
+                                ) {
+                                    Ok(path) => format!(
+                                        "PDF saved to Downloads/{}",
+                                        path.file_name()
+                                            .and_then(|s| s.to_str())
+                                            .unwrap_or("Invoice.pdf")
+                                    ),
+                                    Err(e) => format!("PDF export failed: {e}"),
+                                };
+                                push_invoices_state(
+                                    invoices_wv.as_ref(),
+                                    auth_user.as_ref(),
+                                    &invoice_store,
+                                    Some(&msg),
+                                );
+                            }
+                            UiIpcMsg::SendInvoiceWhatsApp { invoice } => {
+                                let _ = invoices::export_invoice_pdf(
+                                    &invoice,
+                                    &invoice_store.profile,
+                                );
+                                let url = invoices::whatsapp_send_url(
+                                    &invoice,
+                                    &invoice_store.profile,
+                                );
+                                invoices_open = false;
+                                if let Some(iwv) = invoices_wv.take() {
+                                    teardown_webview(iwv, "invoices");
+                                }
+                                refresh_content_layer(
+                                    settings_open,
+                                    &window,
+                                    &proxy,
+                                    &mut settings_wv,
+                                    &mut lock_wv,
+                                    &mut locked_target,
+                                    &mut lock_error,
+                                    &cfg,
+                                    &manager,
+                                    &session_unlocked,
+                                );
+                                let _ = manager.load_url_on_active(&url);
+                                reset_last_ui_json();
+                                sync_ui(
+                                    &sidebar,
+                                    settings_wv.as_ref(),
+                                    &menu_ids,
+                                    tray_icon.as_ref(),
+                                    &cfg,
+                                    &manager,
+                                    settings_open,
+                                    auth_user.as_ref(),
+                                );
+                            }
+                            UiIpcMsg::PickInvoiceLogo => {
+                                if let Some(data_url) = pick_image_data_url() {
+                                    invoice_store.profile.logo_data_url = Some(data_url);
+                                    if let Some(u) = auth_user.as_ref() {
+                                        invoice_store.save(u.id);
+                                    }
+                                    push_invoices_state(
+                                        invoices_wv.as_ref(),
+                                        auth_user.as_ref(),
+                                        &invoice_store,
+                                        Some("Local logo updated."),
+                                    );
+                                }
                             }
                             UiIpcMsg::TogglePeriodicWake => {
                                 cfg.periodic_wake_enabled = !cfg.periodic_wake_enabled;
@@ -1969,6 +2385,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::ToggleQuitOnClose => {
@@ -1982,6 +2399,7 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                             UiIpcMsg::ToggleLaunchAtLogin => {
@@ -1996,11 +2414,242 @@ fn main() {
                                     &cfg,
                                     &manager,
                                     settings_open,
+                                    auth_user.as_ref(),
                                 );
                             }
                         }
                     }
                 }
+                AppEvent::AuthResult(outcome) => {
+                    match outcome {
+                        auth::AuthOutcome::Authenticated { user } => {
+                            invoice_store = invoices::LocalInvoiceStore::load(user.id);
+                            auth_user = Some(user);
+                            auth_msg.clear();
+                            auth_is_err = false;
+                            if let Some(awv) = auth_wv.take() {
+                                teardown_webview(awv, "auth");
+                            }
+                            let _ = sidebar.set_visible(true);
+                            let rects = layout_rects(&window);
+                            if manager.active_id().is_none() {
+                                let initial_id = if start_hidden {
+                                    None
+                                } else {
+                                    cfg.active_account
+                                        .filter(|id| !cfg.get(*id).map(|a| a.locked).unwrap_or(false))
+                                        .or_else(|| cfg.accounts.iter().find(|a| !a.locked).map(|a| a.id))
+                                };
+                                if let Some(id) = initial_id {
+                                    let _ = manager.switch_to(
+                                        id,
+                                        &cfg.accounts,
+                                        &window,
+                                        &proxy,
+                                        rects.content,
+                                        cfg.max_live_webviews,
+                                        !settings_open,
+                                    );
+                                } else if !start_hidden
+                                    && let Some(first_locked) = cfg
+                                        .active_account
+                                        .or_else(|| cfg.accounts.first().map(|a| a.id))
+                                    && cfg.get(first_locked).is_some_and(|a| a.locked)
+                                {
+                                    locked_target = Some(first_locked);
+                                }
+                                manager.queue_cold_start_staggered(&cfg.accounts, initial_id);
+                            }
+                            refresh_content_layer(
+                                settings_open,
+                                &window,
+                                &proxy,
+                                &mut settings_wv,
+                                &mut lock_wv,
+                                &mut locked_target,
+                                &mut lock_error,
+                                &cfg,
+                                &manager,
+                                &session_unlocked,
+                            );
+                            reset_last_ui_json();
+                            sync_ui(
+                                &sidebar,
+                                settings_wv.as_ref(),
+                                &menu_ids,
+                                tray_icon.as_ref(),
+                                &cfg,
+                                &manager,
+                                settings_open,
+                                auth_user.as_ref(),
+                            );
+                        }
+                        auth::AuthOutcome::SignupOtpSent { email, message } => {
+                            auth_email = email;
+                            auth_view = "otp".to_string();
+                            auth_msg = message;
+                            auth_is_err = false;
+                            push_auth_state(
+                                auth_wv.as_ref(),
+                                &auth_view,
+                                Some(&auth_email),
+                                Some(&auth_msg),
+                                false,
+                                true,
+                                60,
+                            );
+                        }
+                        auth::AuthOutcome::OtpResent { message } => {
+                            auth_view = "otp".to_string();
+                            auth_msg = message;
+                            auth_is_err = false;
+                            push_auth_state(
+                                auth_wv.as_ref(),
+                                &auth_view,
+                                Some(&auth_email),
+                                Some(&auth_msg),
+                                false,
+                                true,
+                                60,
+                            );
+                        }
+                        auth::AuthOutcome::LoggedOut => {
+                            auth_user = None;
+                            settings_open = false;
+                            invoices_open = false;
+                            if let Some(iwv) = invoices_wv.take() {
+                                teardown_webview(iwv, "invoices");
+                            }
+                            if let Some(swv) = settings_wv.take() {
+                                teardown_webview(swv, "settings");
+                            }
+                            if let Some(lwv) = lock_wv.take() {
+                                teardown_webview(lwv, "lock");
+                            }
+                            manager.shutdown_all();
+                            let _ = sidebar.set_visible(false);
+                            auth_view = "login".to_string();
+                            auth_msg.clear();
+                            auth_is_err = false;
+                            if auth_wv.is_none() {
+                                auth_wv = Some(build_ui_webview(
+                                    include_str!("../assets/auth.html"),
+                                    full_window_rect(&window),
+                                    true,
+                                    &window,
+                                    &proxy,
+                                ));
+                            }
+                            push_auth_state(
+                                auth_wv.as_ref(),
+                                &auth_view,
+                                Some(&auth_email),
+                                Some(&auth_msg),
+                                false,
+                                false,
+                                0,
+                            );
+                        }
+                        auth::AuthOutcome::Error {
+                            action,
+                            status,
+                            code,
+                            message,
+                            retry_after_secs,
+                        } => {
+                            if action == auth::AuthAction::CheckSession && code == "NETWORK_ERROR"
+                                && let Some(cached) = auth::load_cached_user()
+                            {
+                                let _ = proxy.send_event(AppEvent::AuthResult(
+                                    auth::AuthOutcome::Authenticated { user: cached },
+                                ));
+                                return;
+                            }
+                            if code == "EMAIL_NOT_VERIFIED" {
+                                auth_view = "otp".to_string();
+                            } else if code == "SUBSCRIPTION_REQUIRED" {
+                                auth_view = "sub".to_string();
+                                auth_user = None;
+                                manager.shutdown_all();
+                                let _ = sidebar.set_visible(false);
+                                if auth_wv.is_none() {
+                                    auth_wv = Some(build_ui_webview(
+                                        include_str!("../assets/auth.html"),
+                                        full_window_rect(&window),
+                                        true,
+                                        &window,
+                                        &proxy,
+                                    ));
+                                }
+                            } else if action == auth::AuthAction::CheckSession {
+                                auth::clear_token();
+                                auth_view = "login".to_string();
+                            }
+                            auth_msg = if status == 429
+                                && let Some(secs) = retry_after_secs
+                            {
+                                format!("{message} Please wait {secs}s.")
+                            } else {
+                                message
+                            };
+                            auth_is_err = true;
+                            push_auth_state(
+                                auth_wv.as_ref(),
+                                &auth_view,
+                                Some(&auth_email),
+                                Some(&auth_msg),
+                                true,
+                                false,
+                                0,
+                            );
+                        }
+                    }
+                }
+                AppEvent::InvoiceResult(outcome) => match outcome {
+                    invoices::InvoiceOutcome::SyncedList {
+                        business_name,
+                        invoices,
+                    } => {
+                        if let Some(bname) = business_name
+                            && !bname.trim().is_empty()
+                        {
+                            invoice_store.profile.business_name = bname;
+                        }
+                        invoice_store.invoices = invoices;
+                        invoice_store.has_initial_sync = true;
+                        if let Some(u) = auth_user.as_ref() {
+                            invoice_store.save(u.id);
+                        }
+                        push_invoices_state(
+                            invoices_wv.as_ref(),
+                            auth_user.as_ref(),
+                            &invoice_store,
+                            Some("Synced with cloud."),
+                        );
+                    }
+                    invoices::InvoiceOutcome::SavedOne { id } => {
+                        if let Some(inv) = invoice_store.invoices.iter_mut().find(|x| x.id == id) {
+                            inv.synced = true;
+                        }
+                        if let Some(u) = auth_user.as_ref() {
+                            invoice_store.save(u.id);
+                        }
+                        push_invoices_state(
+                            invoices_wv.as_ref(),
+                            auth_user.as_ref(),
+                            &invoice_store,
+                            Some("Saved & synced."),
+                        );
+                    }
+                    invoices::InvoiceOutcome::Error { message } => {
+                        push_invoices_state(
+                            invoices_wv.as_ref(),
+                            auth_user.as_ref(),
+                            &invoice_store,
+                            Some(&message),
+                        );
+                    }
+                },
                 AppEvent::LifecycleTick => {
                     let rects = layout_rects(&window);
                     let mut changed = manager.tick_lifecycle(&cfg, &window, &proxy, rects.content);
@@ -2029,6 +2678,7 @@ fn main() {
                             &cfg,
                             &manager,
                             settings_open,
+                            auth_user.as_ref(),
                         );
                     }
                 }

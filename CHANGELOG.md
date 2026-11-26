@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.4.9
+
+- Add Hopr Account Auth Gate (`auth.rs`, `auth.html`): Sign Up (Name, Phone, Email, Password), 6-digit Email OTP verification, Sign In, Keychain/Credential Manager token storage, and Startup/Subscription verification.
+- Add server-controlled `max_accounts` limit enforcement and `modules` permission support.
+- Add Invoices / Reservation Form (Guest Copy) module (`invoices.rs`, `invoices.html`): local-first caching, cloud DB sync, local-only business logo, 1-click A4 PDF export to Downloads, and instant Send via WhatsApp.
+- Fix document download filenames (`resolve_download_dest`) so WhatsApp Web `blob:` downloads preserve their real filename and extension instead of saving as random UUIDs.
+
 ## v1.4.8
 
 - Windows: share one `ICoreWebView2Environment` (`webview2-env`) across all accounts using persistent named `ICoreWebView2Profile` instances (`win_profile_webview.rs`) to reduce duplicate browser/GPU/network process overhead.

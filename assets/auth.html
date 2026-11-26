@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hopr — Sign In</title>
+  <style>
+    :root {
+      --bg: #f4f2ec;
+      --card-bg: #ffffff;
+      --border: rgba(0, 0, 0, 0.09);
+      --input-bg: #faf9f6;
+      --input-border: rgba(0, 0, 0, 0.16);
+      --text: #141715;
+      --muted: #656b66;
+      --accent: #0e5a46;
+      --accent-hover: #0a4636;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --btn-sec-bg: #ece9e1;
+      --btn-sec-hover: #e1ddd3;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121413;
+        --card-bg: #1c1f1d;
+        --border: rgba(255, 255, 255, 0.08);
+        --input-bg: #141715;
+        --input-border: rgba(255, 255, 255, 0.14);
+        --text: #f3f4f1;
+        --muted: #989e98;
+        --accent: #1b8a6b;
+        --accent-hover: #157459;
+        --danger: #f87171;
+        --success: #34d399;
+        --btn-sec-bg: #272b28;
+        --btn-sec-hover: #323733;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .card {
+      width: 400px;
+      max-width: calc(100vw - 32px);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px 28px 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-name {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 0 0 20px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .field input {
+      width: 100%;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--input-border);
+      background: var(--input-bg);
+      color: var(--text);
+      padding: 0 12px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .field input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn {
+      width: 100%;
+      height: 42px;
+      border-radius: 10px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: background 0.14s ease, opacity 0.14s ease;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: var(--btn-sec-bg);
+      color: var(--text);
+      margin-top: 8px;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--btn-sec-hover);
+    }
+
+    .msg {
+      min-height: 18px;
+      margin-top: 12px;
+      font-size: 12.5px;
+      line-height: 1.4;
+    }
+
+    .msg.error { color: var(--danger); }
+    .msg.ok { color: var(--success); }
+
+    .switch-row {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .link-btn {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 0 2px;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div class="brand-name">Hopr</div>
+    </div>
+
+    <div id="view-verifying" class="hidden">
+      <h1>Checking your session…</h1>
+      <p class="sub">Verifying your Hopr account and subscription status.</p>
+    </div>
+
+    <div id="view-login" class="hidden">
+      <h1>Welcome back</h1>
+      <p class="sub">Sign in to access your WhatsApp workspace.</p>
+      <form id="login-form">
+        <div class="field">
+          <label for="login-email">Email</label>
+          <input id="login-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+        </div>
+        <div class="field">
+          <label for="login-password">Password</label>
+          <input id="login-password" type="password" autocomplete="current-password" placeholder="Enter password" required />
+        </div>
+        <button id="login-submit" type="submit" class="btn btn-primary">Sign In</button>
+      </form>
+      <div class="switch-row">
+        Don't have an account? <button type="button" id="to-signup-btn" class="link-btn">Create Account</button>
+      </div>
+    </div>
+
+    <div id="view-signup" class="hidden">
+      <h1>Create your account</h1>
+      <p class="sub">Sign up with your name, phone number, and email.</p>
+      <form id="signup-form">
+        <div class="field">
+          <label for="signup-name">Full Name</label>
+          <input id="signup-name" type="text" placeholder="Alice Hopper" required />
+        </div>
+        <div class="field">
+          <label for="signup-phone">Phone Number</label>
+          <input id="signup-phone" type="tel" placeholder="+880 1XXX-XXXXXX" required />
+        </div>
+        <div class="field">
+          <label for="signup-email">Email</label>
+          <input id="signup-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+        </div>
+        <div class="field">
+          <label for="signup-password">Password (min 8 chars)</label>
+          <input id="signup-password" type="password" minlength="8" autocomplete="new-password" placeholder="Create password" required />
+        </div>
+        <button id="signup-submit" type="submit" class="btn btn-primary">Sign Up &amp; Send OTP</button>
+      </form>
+      <div class="switch-row">
+        Already have an account? <button type="button" id="to-login-btn" class="link-btn">Sign In</button>
+      </div>
+    </div>
+
+    <div id="view-otp" class="hidden">
+      <h1>Verify your email</h1>
+      <p class="sub" id="otp-sub">Enter the 6-digit code sent to your email.</p>
+      <form id="otp-form">
+        <div class="field">
+          <label for="otp-code">6-Digit Code</label>
+          <input id="otp-code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" required />
+        </div>
+        <button id="otp-submit" type="submit" class="btn btn-primary">Verify &amp; Continue</button>
+      </form>
+      <button type="button" id="resend-otp-btn" class="btn btn-secondary">Resend Code</button>
+      <div class="switch-row">
+        <button type="button" id="otp-back-btn" class="link-btn">Back to Sign In</button>
+      </div>
+    </div>
+
+    <div id="view-sub" class="hidden">
+      <h1>Subscription required</h1>
+      <p class="sub" id="sub-desc">Your Hopr subscription is inactive or expired. Please renew to continue.</p>
+      <button type="button" id="sub-retry-btn" class="btn btn-primary">Check Subscription Again</button>
+      <button type="button" id="sub-logout-btn" class="btn btn-secondary">Sign Out</button>
+    </div>
+
+    <div id="auth-msg" class="msg"></div>
+  </div>
+
+  <script>
+    const post = (payload) => {
+      const raw = JSON.stringify(payload);
+      try {
+        if (window.ipc && window.ipc.postMessage) {
+          window.ipc.postMessage(raw);
+        } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ipc) {
+          window.webkit.messageHandlers.ipc.postMessage(raw);
+        }
+      } catch (_) {}
+    };
+
+    let currentEmail = "";
+    let resendCooldownTimer = null;
+    const msgEl = document.getElementById("auth-msg");
+
+    const setBusy = (busy) => {
+      document.querySelectorAll("button[type='submit'], #sub-retry-btn").forEach((b) => {
+        b.disabled = busy;
+      });
+    };
+
+    const setMessage = (text, isError) => {
+      msgEl.textContent = text || "";
+      msgEl.className = "msg " + (text ? (isError ? "error" : "ok") : "");
+    };
+
+    const showView = (name) => {
+      ["verifying", "login", "signup", "otp", "sub"].forEach((v) => {
+        document.getElementById("view-" + v).classList.toggle("hidden", v !== name);
+      });
+      setBusy(false);
+    };
+
+    const startResendCooldown = (secs) => {
+      const btn = document.getElementById("resend-otp-btn");
+      if (resendCooldownTimer) clearInterval(resendCooldownTimer);
+      let left = secs || 60;
+      btn.disabled = true;
+      btn.textContent = `Resend Code (${left}s)`;
+      resendCooldownTimer = setInterval(() => {
+        left -= 1;
+        if (left <= 0) {
+          clearInterval(resendCooldownTimer);
+          resendCooldownTimer = null;
+          btn.disabled = false;
+          btn.textContent = "Resend Code";
+        } else {
+          btn.textContent = `Resend Code (${left}s)`;
+        }
+      }, 1000);
+    };
+
+    document.getElementById("to-signup-btn").addEventListener("click", () => {
+      setMessage("", false);
+      showView("signup");
+    });
+
+    document.getElementById("to-login-btn").addEventListener("click", () => {
+      setMessage("", false);
+      showView("login");
+    });
+
+    document.getElementById("otp-back-btn").addEventListener("click", () => {
+      setMessage("", false);
+      showView("login");
+    });
+
+    document.getElementById("login-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      currentEmail = document.getElementById("login-email").value.trim();
+      const password = document.getElementById("login-password").value;
+      setMessage("", false);
+      setBusy(true);
+      post({ type: "auth_login", email: currentEmail, password });
+    });
+
+    document.getElementById("signup-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = document.getElementById("signup-name").value.trim();
+      const phone = document.getElementById("signup-phone").value.trim();
+      currentEmail = document.getElementById("signup-email").value.trim();
+      const password = document.getElementById("signup-password").value;
+      setMessage("", false);
+      setBusy(true);
+      post({ type: "auth_signup", name, phone, email: currentEmail, password });
+    });
+
+    document.getElementById("otp-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const otp = document.getElementById("otp-code").value.trim();
+      setMessage("", false);
+      setBusy(true);
+      post({ type: "auth_verify_otp", email: currentEmail, otp });
+    });
+
+    document.getElementById("resend-otp-btn").addEventListener("click", () => {
+      if (!currentEmail) return;
+      setMessage("", false);
+      post({ type: "auth_resend_otp", email: currentEmail });
+    });
+
+    document.getElementById("sub-retry-btn").addEventListener("click", () => {
+      setMessage("", false);
+      setBusy(true);
+      post({ type: "auth_check_session" });
+    });
+
+    document.getElementById("sub-logout-btn").addEventListener("click", () => {
+      setMessage("", false);
+      post({ type: "auth_logout" });
+    });
+
+    document.body.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest(".card, button, input, a")) return;
+      post({ type: "drag_window" });
+    });
+
+    window.__HOPR_AUTH_STATE__ = (state) => {
+      if (state.email) currentEmail = state.email;
+      showView(state.view || "login");
+      if (state.view === "otp") {
+        document.getElementById("otp-sub").textContent =
+          `Enter the 6-digit code sent to ${currentEmail || "your email"}.`;
+        if (state.start_cooldown) startResendCooldown(state.cooldown_secs || 60);
+      }
+      if (state.view === "sub" && state.message) {
+        document.getElementById("sub-desc").textContent = state.message;
+      }
+      setMessage(state.message || "", Boolean(state.is_error));
+    };
+
+    post({ type: "auth_ready" });
+  </script>
+</body>
+</html>

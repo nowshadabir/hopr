@@ -699,6 +699,15 @@
           <h2>Lifecycle &amp; window</h2>
           <p class="section-sub">Control when accounts sleep and how the window behaves.</p>
         </div>
+        <div class="card-list" style="margin-bottom: 14px;">
+          <div class="list-row">
+            <div>
+              <div class="row-meta-title" id="hopr-acct-name">Hopr Account</div>
+              <div class="row-meta-sub" id="hopr-acct-meta">Signed in</div>
+            </div>
+            <button id="hopr-logout-btn" class="btn-outline danger" type="button">Sign Out</button>
+          </div>
+        </div>
         <div class="card-list">
           <div class="list-row">
             <div>
@@ -1192,7 +1201,31 @@
         clearPinBtn.style.display = "none";
         pinStateSub.textContent = "No PIN set. Set a 4+ character PIN to lock accounts" + (state.can_biometric ? " (or use Touch ID)." : ".");
       }
+      const addBtn = document.getElementById("add-acct-btn");
+      const maxAccts = state.auth_user && state.auth_user.max_accounts != null ? state.auth_user.max_accounts : null;
+      if (maxAccts !== null && accounts.length >= maxAccts) {
+        addBtn.disabled = true;
+        addBtn.textContent = `Account limit reached (${accounts.length}/${maxAccts})`;
+      } else {
+        addBtn.disabled = false;
+        addBtn.textContent = "+ Add account";
+      }
+
+      if (state.auth_user) {
+        document.getElementById("hopr-acct-name").textContent =
+          `${state.auth_user.name} (${state.auth_user.subscription_status})`;
+        const limitText = maxAccts !== null ? `Accounts: ${accounts.length}/${maxAccts}` : "Unlimited accounts";
+        const mods = Array.isArray(state.auth_user.modules) && state.auth_user.modules.length
+          ? `Modules: ${state.auth_user.modules.join(", ")}`
+          : null;
+        document.getElementById("hopr-acct-meta").textContent =
+          [state.auth_user.email, state.auth_user.phone, limitText, mods].filter(Boolean).join(" · ");
+      }
     };
+
+    document.getElementById("hopr-logout-btn").addEventListener("click", () => {
+      post({ type: "auth_logout" });
+    });
 
     const pinStatusMsg = document.getElementById("pin-status-msg");
     window.__onPinResult = function (ok, msg) {

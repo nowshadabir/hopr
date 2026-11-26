@@ -1,6 +1,6 @@
 [package]
 name = "hopr"
-version = "1.4.8"
+version = "1.4.9"
 edition = "2024"
 
 [dependencies]
@@ -14,6 +14,9 @@ serde_json = "1.0"
 toml = "0.8"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 sha2 = "0.10"
+ureq = { version = "2", default-features = false, features = ["json", "native-tls"] }
+native-tls = "0.2"
+keyring = { version = "3", features = ["apple-native", "windows-native"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"

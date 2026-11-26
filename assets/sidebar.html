@@ -292,6 +292,14 @@
 <body>
   <div class="sidebar">
     <div id="accounts" class="accounts"></div>
+    <button id="invoices-btn" class="settings-btn" title="Invoices" style="margin-bottom:4px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <line x1="8" y1="13" x2="16" y2="13"></line>
+        <line x1="8" y1="17" x2="16" y2="17"></line>
+      </svg>
+    </button>
     <button id="settings-btn" class="settings-btn" title="Accounts &amp; Settings">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"></circle>
@@ -317,6 +325,10 @@
         <circle cx="12" cy="8.5" r="4.2"/>
         <path d="M4.5 20.5c0-3.9 3.35-6.5 7.5-6.5s7.5 2.6 7.5 6.5"/>
       </svg>`;
+
+    document.getElementById("invoices-btn").addEventListener("click", () => {
+      post({ type: "toggle_invoices" });
+    });
 
     document.getElementById("settings-btn").addEventListener("click", () => {
       post({ type: "toggle_settings" });
@@ -392,6 +404,8 @@
       const container = document.getElementById("accounts");
       const settingsBtn = document.getElementById("settings-btn");
       settingsBtn.classList.toggle("active", Boolean(state.settings_open));
+      const invoicesBtn = document.getElementById("invoices-btn");
+      if (invoicesBtn) invoicesBtn.classList.toggle("active", Boolean(state.invoices_open));
 
       const accounts = state.accounts || [];
       const collapsedList = state.collapsed_groups || [];
@@ -537,10 +551,15 @@
 
       const addBtn = document.createElement("button");
       addBtn.className = "add-btn";
-      addBtn.title = "Add account";
+      const maxAccts = state.auth_user && state.auth_user.max_accounts != null ? state.auth_user.max_accounts : null;
+      const atLimit = maxAccts !== null && accounts.length >= maxAccts;
+      addBtn.disabled = atLimit;
+      addBtn.style.opacity = atLimit ? "0.35" : "";
+      addBtn.style.cursor = atLimit ? "not-allowed" : "pointer";
+      addBtn.title = atLimit ? `Account limit reached (${accounts.length}/${maxAccts})` : "Add account";
       addBtn.textContent = "+";
       addBtn.addEventListener("click", () => {
-        post({ type: "add_account" });
+        if (!atLimit) post({ type: "add_account" });
       });
       container.appendChild(addBtn);
     };
