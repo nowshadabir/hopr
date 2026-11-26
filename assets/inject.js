@@ -3,9 +3,12 @@
   window.__hoprInjected = true;
 
   const post = (payload) => {
+    const raw = JSON.stringify(payload);
     try {
-      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ipc) {
-        window.webkit.messageHandlers.ipc.postMessage(JSON.stringify(payload));
+      if (window.ipc && window.ipc.postMessage) {
+        window.ipc.postMessage(raw);
+      } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ipc) {
+        window.webkit.messageHandlers.ipc.postMessage(raw);
       }
     } catch (_) {}
   };

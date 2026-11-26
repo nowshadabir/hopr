@@ -15,6 +15,8 @@ use uuid::Uuid;
 use wry::{Rect, WebView, WebViewBuilder, WebViewBuilderExtDarwin, WebViewExtMacOS};
 #[cfg(not(target_os = "macos"))]
 use wry::{Rect, WebContext, WebView, WebViewBuilder};
+#[cfg(target_os = "windows")]
+use wry::WebViewBuilderExtWindows;
 
 const WHATSAPP_URL: &str = "https://web.whatsapp.com";
 const SAFARI_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
@@ -488,7 +490,15 @@ impl WebViewManager {
             let ctx = rt
                 .web_context
                 .get_or_insert_with(|| WebContext::new(Some(profile_dir)));
-            WebViewBuilder::new_with_web_context(ctx)
+            let b = WebViewBuilder::new_with_web_context(ctx);
+            #[cfg(target_os = "windows")]
+            let b = b.with_additional_browser_args(
+                "--disable-features=msEdgeTranslate,msEdgeShopping,msEdgeSidebarV2,OptimizationHints,msEdgeMiniMenu \
+                 --disable-background-networking --disable-default-apps --disable-extensions \
+                 --disable-sync --metrics-recording-only --no-first-run \
+                 --js-flags=--max-old-space-size=192",
+            );
+            b
         };
 
         let webview = builder
@@ -551,6 +561,10 @@ impl WebViewManager {
             if let Some(wv) = rt.webview.take() {
                 teardown_webview(wv, &format!("acct-{id}"));
             }
+            #[cfg(not(target_os = "macos"))]
+            {
+                rt.web_context = None;
+            }
             rt.lifecycle = LifecycleState::Hibernated;
             rt.connection_state = "hibernated".to_string();
             rt.waking_until = None;
@@ -589,6 +603,10 @@ impl WebViewManager {
         for (id, rt) in self.runtimes.iter_mut() {
             if let Some(wv) = rt.webview.take() {
                 teardown_webview(wv, &format!("shutdown-{id}"));
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                rt.web_context = None;
             }
             rt.lifecycle = LifecycleState::Hibernated;
         }

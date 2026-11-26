@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.6
+
+- Fix Windows WebView2 IPC (`window.ipc.postMessage`) in `sidebar.html`, `settings.html`, and `inject.js` so sidebar, Settings, and WhatsApp Web badges/notifications work on Windows.
+- Fix Windows `Window -> Close Window` menu item and `Ctrl+W` shortcut.
+- Reduce Windows WebView2 RAM usage via Chromium memory/feature flags and releasing `WebContext` on hibernation.
+
 ## v1.4.5
 
 - Fix Windows CI release pipeline (`cargo test --release`) so `Hopr-1.4.5-win-x64.exe` and `Hopr-1.4.5-Setup.exe` build and publish alongside `Hopr-1.4.5.dmg`.

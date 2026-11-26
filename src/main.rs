@@ -768,6 +768,45 @@ fn main() {
                     &manager,
                     settings_open,
                 );
+            } else if menu_evt.id == menu_ids.close_window {
+                if cfg.quit_on_close {
+                    graceful_quit(&mut manager, control_flow);
+                    return;
+                } else {
+                    if window.fullscreen().is_some() {
+                        window.set_fullscreen(None);
+                    }
+                    session_unlocked.clear();
+                    if let Some(id) = manager.active_id().or(cfg.active_account)
+                        && cfg.get(id).is_some_and(|a| a.locked)
+                    {
+                        locked_target = Some(id);
+                    }
+                    manager.on_window_hidden_or_minimized();
+                    refresh_content_layer(
+                        settings_open,
+                        &window,
+                        &proxy,
+                        &mut settings_wv,
+                        &mut lock_wv,
+                        &mut locked_target,
+                        &mut lock_error,
+                        &cfg,
+                        &manager,
+                        &session_unlocked,
+                    );
+                    window.set_visible(false);
+                    hide_application();
+                    sync_ui(
+                        &sidebar,
+                        settings_wv.as_ref(),
+                        &menu_ids,
+                        tray_icon.as_ref(),
+                        &cfg,
+                        &manager,
+                        settings_open,
+                    );
+                }
             } else if menu_evt.id == menu_ids.tray_quit {
                 graceful_quit(&mut manager, control_flow);
                 return;

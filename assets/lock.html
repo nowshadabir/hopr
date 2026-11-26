@@ -165,9 +165,14 @@
     let lockState = null;
 
     function post(msg) {
-      if (window.ipc && window.ipc.postMessage) {
-        window.ipc.postMessage(JSON.stringify(msg));
-      }
+      const raw = JSON.stringify(msg);
+      try {
+        if (window.ipc && window.ipc.postMessage) {
+          window.ipc.postMessage(raw);
+        } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ipc) {
+          window.webkit.messageHandlers.ipc.postMessage(raw);
+        }
+      } catch (_) {}
     }
 
     const pinForm = document.getElementById("pin-form");

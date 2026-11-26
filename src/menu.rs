@@ -20,6 +20,7 @@ pub struct AppMenuIds {
     pub hibernate_inactive: muda::MenuId,
     pub toggle_mute: muda::MenuId,
     pub open_settings: muda::MenuId,
+    pub close_window: muda::MenuId,
     pub switch_accounts: Vec<muda::MenuId>,
     pub switch_account_items: Vec<MenuItem>,
     pub tray_show: muda::MenuId,
@@ -231,10 +232,28 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
         switch_account_items.push(item);
     }
 
+    let close_window_item = MenuItem::new(
+        "Close Window",
+        true,
+        Some(Accelerator::new(
+            Some(if cfg!(target_os = "macos") {
+                Modifiers::SUPER
+            } else {
+                Modifiers::CONTROL
+            }),
+            Code::KeyW,
+        )),
+    );
     let window_menu = Submenu::new("Window", true);
+    #[cfg(target_os = "macos")]
     let _ = window_menu.append_items(&[
         &PredefinedMenuItem::minimize(None),
         &PredefinedMenuItem::close_window(None),
+    ]);
+    #[cfg(not(target_os = "macos"))]
+    let _ = window_menu.append_items(&[
+        &PredefinedMenuItem::minimize(None),
+        &close_window_item,
     ]);
 
     let _ = menu.append_items(&[&app_menu, &edit_menu, &accounts_menu, &window_menu]);
@@ -247,6 +266,7 @@ pub fn build_app_menu() -> (Menu, AppMenuIds) {
         hibernate_inactive: hibernate_inactive.id().clone(),
         toggle_mute: toggle_mute.id().clone(),
         open_settings: open_settings.id().clone(),
+        close_window: close_window_item.id().clone(),
         switch_accounts,
         switch_account_items,
         tray_show: tray_show.id().clone(),
