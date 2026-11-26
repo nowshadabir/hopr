@@ -229,6 +229,7 @@ jobs:
           !insertmacro MUI_PAGE_INSTFILES
           !insertmacro MUI_LANGUAGE "English"
           Section "Install"
+            ExecWait 'taskkill /F /IM Hopr.exe'
             SetOutPath "`$INSTDIR"
             File "/oname=Hopr.exe" "$exeSrc"
             CreateDirectory "`$SMPROGRAMS\Hopr"

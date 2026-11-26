@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.7
+
+- Add `sidebar_ready` IPC handshake so Windows WebView2 always populates the sidebar on startup.
+- Use a dedicated `ui-webview` `WebContext` for sidebar, settings, and lock WebViews on Windows.
+- Set explicit Windows window/taskbar icon (`with_window_icon`) and kill running `Hopr.exe` before NSIS Setup upgrade.
+
 ## v1.4.6
 
 - Fix Windows WebView2 IPC (`window.ipc.postMessage`) in `sidebar.html`, `settings.html`, and `inject.js` so sidebar, Settings, and WhatsApp Web badges/notifications work on Windows.

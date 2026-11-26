@@ -98,6 +98,7 @@ enum UiIpcMsg {
     SetCustomAvatar { id: Uuid, avatar_url: Option<String> },
     ToggleSettings,
     CloseSettings,
+    SidebarReady,
     SettingsReady,
     TogglePreviews,
     ToggleDockBadge,
@@ -378,6 +379,25 @@ fn spawn_lifecycle_ticker(proxy: EventLoopProxy<AppEvent>) {
     });
 }
 
+#[cfg(not(target_os = "macos"))]
+fn with_ui_web_context<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut wry::WebContext) -> R,
+{
+    thread_local! {
+        static UI_CTX: std::cell::RefCell<Option<wry::WebContext>> = const { std::cell::RefCell::new(None) };
+    }
+    UI_CTX.with(|cell| {
+        let mut borrow = cell.borrow_mut();
+        let ctx = borrow.get_or_insert_with(|| {
+            let dir = AppConfig::app_support_dir().join("ui-webview");
+            let _ = AppConfig::ensure_secure_dir(&dir);
+            wry::WebContext::new(Some(dir))
+        });
+        f(ctx)
+    })
+}
+
 fn build_ui_webview(
     html: &str,
     bounds: Rect,
@@ -386,18 +406,48 @@ fn build_ui_webview(
     proxy: &EventLoopProxy<AppEvent>,
 ) -> WebView {
     let ui_proxy = proxy.clone();
-    WebViewBuilder::new()
-        .with_html(html)
-        .with_bounds(bounds)
-        .with_visible(visible)
-        .with_devtools(cfg!(debug_assertions))
-        .with_ipc_handler(move |req| {
-            let _ = ui_proxy.send_event(AppEvent::UiIpc {
-                body: req.into_body(),
-            });
+    #[cfg(target_os = "macos")]
+    {
+        WebViewBuilder::new()
+            .with_html(html)
+            .with_bounds(bounds)
+            .with_visible(visible)
+            .with_devtools(cfg!(debug_assertions))
+            .with_ipc_handler(move |req| {
+                let _ = ui_proxy.send_event(AppEvent::UiIpc {
+                    body: req.into_body(),
+                });
+            })
+            .build_as_child(window)
+            .expect("Failed to create UI webview")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        with_ui_web_context(|ctx| {
+            WebViewBuilder::new_with_web_context(ctx)
+                .with_html(html)
+                .with_bounds(bounds)
+                .with_visible(visible)
+                .with_devtools(cfg!(debug_assertions))
+                .with_ipc_handler(move |req| {
+                    let _ = ui_proxy.send_event(AppEvent::UiIpc {
+                        body: req.into_body(),
+                    });
+                })
+                .build_as_child(window)
+                .expect("Failed to create UI webview")
         })
-        .build_as_child(window)
-        .expect("Failed to create UI webview")
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn load_window_icon() -> Option<tao::window::Icon> {
+    let decoder = png::Decoder::new(std::io::Cursor::new(include_bytes!("../assets/tray-32.png")));
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).ok()?;
+    buf.truncate(info.buffer_size());
+    tao::window::Icon::from_rgba(buf, info.width, info.height).ok()
 }
 
 fn graceful_quit(manager: &mut WebViewManager, control_flow: &mut ControlFlow) {
@@ -430,6 +480,8 @@ fn main() {
         .with_titlebar_transparent(true)
         .with_fullsize_content_view(true)
         .with_title_hidden(true);
+    #[cfg(target_os = "windows")]
+    let builder = builder.with_window_icon(load_window_icon());
     let window = builder
         .build(&event_loop)
         .expect("Failed to create main window");
@@ -1777,7 +1829,7 @@ fn main() {
                                     settings_open,
                                 );
                             }
-                            UiIpcMsg::SettingsReady => {
+                            UiIpcMsg::SidebarReady | UiIpcMsg::SettingsReady => {
                                 sync_ui(
                                     &sidebar,
                                     settings_wv.as_ref(),
