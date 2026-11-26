@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.8
+
+- Windows: share one `ICoreWebView2Environment` (`webview2-env`) across all accounts using persistent named `ICoreWebView2Profile` instances (`win_profile_webview.rs`) to reduce duplicate browser/GPU/network process overhead.
+- Windows: set `MemoryUsageTargetLevel::Low` on background live accounts and `Normal` on active accounts so notifications stay instant while idle memory is trimmed.
+- Cross-platform: diff-based sidebar DOM updates (`sidebar.html`), `sync_ui` payload deduplication (`main.rs`), and background `inject.js` status polling throttling (`15s` when hidden).
+
 ## v1.4.7
 
 - Add `sidebar_ready` IPC handshake so Windows WebView2 always populates the sidebar on startup.

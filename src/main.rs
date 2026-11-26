@@ -9,6 +9,8 @@ mod platform;
 mod sparkle;
 mod webview_manager;
 #[cfg(target_os = "windows")]
+mod win_profile_webview;
+#[cfg(target_os = "windows")]
 mod windows;
 
 use config::{AppConfig, Reminder};
@@ -158,6 +160,26 @@ fn layout_rects(window: &Window) -> LayoutRects {
     }
 }
 
+thread_local! {
+    static LAST_UI_JSON: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+fn update_last_ui_json(json: &str) -> bool {
+    LAST_UI_JSON.with(|cell| {
+        let mut last = cell.borrow_mut();
+        if last.as_str() == json {
+            return false;
+        }
+        last.clear();
+        last.push_str(json);
+        true
+    })
+}
+
+fn reset_last_ui_json() {
+    LAST_UI_JSON.with(|cell| cell.borrow_mut().clear());
+}
+
 fn sync_ui(
     sidebar: &WebView,
     settings_wv: Option<&WebView>,
@@ -198,8 +220,11 @@ fn sync_ui(
     };
 
     if let Ok(json) = serde_json::to_string(&payload) {
-        let sb_script = format!("window.__updateSidebar && window.__updateSidebar({json});");
-        let _ = sidebar.evaluate_script(&sb_script);
+        let changed = update_last_ui_json(&json);
+        if changed {
+            let sb_script = format!("window.__updateSidebar && window.__updateSidebar({json});");
+            let _ = sidebar.evaluate_script(&sb_script);
+        }
         if let Some(swv) = settings_wv {
             let st_script = format!("window.__updateSettings && window.__updateSettings({json});");
             let _ = swv.evaluate_script(&st_script);
@@ -976,7 +1001,7 @@ fn main() {
                 if let Some(lwv) = &lock_wv {
                     let _ = lwv.set_bounds(rects.content);
                 }
-                manager.resize_all(rects.content);
+                manager.resize_all(rects.content, window.scale_factor());
             }
             Event::WindowEvent {
                 event: WindowEvent::Focused(focused),
@@ -1830,6 +1855,7 @@ fn main() {
                                 );
                             }
                             UiIpcMsg::SidebarReady | UiIpcMsg::SettingsReady => {
+                                reset_last_ui_json();
                                 sync_ui(
                                     &sidebar,
                                     settings_wv.as_ref(),

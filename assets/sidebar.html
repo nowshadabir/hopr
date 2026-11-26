@@ -329,21 +329,92 @@
     });
 
     let draggedAccountId = null;
+    let lastStructureKey = "";
+    const acctNodes = new Map();
+
+    const updateAccountNode = (refs, acct, state) => {
+      const { wrap, btn, pin, lock, badge, dot } = refs;
+      wrap.className = "account-wrap"
+        + (acct.is_active && !state.settings_open ? " active" : "")
+        + (acct.lifecycle === "hibernated" ? " hibernated" : "");
+
+      btn.style.backgroundColor = acct.color || "#135D43";
+      const flags = [];
+      if (acct.keep_connected) flags.push("Pinned");
+      if (acct.locked) flags.push("Locked");
+      if (acct.needs_login) flags.push("Needs login");
+      if (acct.offline) flags.push("Offline");
+      if (acct.reconnecting) flags.push("Reconnecting");
+      if (acct.muted) flags.push("Muted");
+      if (acct.stale_unread && acct.unread > 0) flags.push("Cached unread");
+      btn.title = `${acct.name} (${acct.lifecycle})${flags.length ? " · " + flags.join(", ") : ""}`;
+
+      const nextAvatar = acct.avatar_url || "";
+      if (refs.avatarUrl !== nextAvatar) {
+        refs.avatarUrl = nextAvatar;
+        btn.innerHTML = "";
+        if (nextAvatar) {
+          const img = document.createElement("img");
+          img.src = nextAvatar;
+          img.alt = acct.name;
+          btn.appendChild(img);
+        } else {
+          btn.innerHTML = avatarFallbackSvg();
+        }
+      }
+
+      pin.style.display = acct.keep_connected ? "block" : "none";
+      lock.style.display = acct.locked ? "flex" : "none";
+
+      if (acct.unread > 0) {
+        badge.style.display = "flex";
+        badge.className = "badge" + (acct.stale_unread ? " stale" : "");
+        badge.textContent = acct.unread > 99 ? "99+" : String(acct.unread);
+      } else {
+        badge.style.display = "none";
+      }
+
+      if (acct.needs_login || acct.offline || acct.reconnecting) {
+        dot.style.display = "block";
+        dot.className = "state-dot " + (
+          acct.needs_login
+            ? "state-login"
+            : acct.offline
+            ? "state-offline"
+            : "state-reconnecting"
+        );
+      } else {
+        dot.style.display = "none";
+      }
+    };
 
     window.__updateSidebar = (state) => {
       const container = document.getElementById("accounts");
-      container.innerHTML = "";
-
       const settingsBtn = document.getElementById("settings-btn");
       settingsBtn.classList.toggle("active", Boolean(state.settings_open));
 
-      const collapsedSet = new Set(state.collapsed_groups || []);
+      const accounts = state.accounts || [];
+      const collapsedList = state.collapsed_groups || [];
+      const structureKey = JSON.stringify([
+        accounts.map((a) => [a.id, a.group || ""]),
+        collapsedList,
+      ]);
+
+      if (structureKey === lastStructureKey) {
+        for (const acct of accounts) {
+          const refs = acctNodes.get(acct.id);
+          if (refs) updateAccountNode(refs, acct, state);
+        }
+        return;
+      }
+
+      lastStructureKey = structureKey;
+      acctNodes.clear();
+      container.innerHTML = "";
+      const collapsedSet = new Set(collapsedList);
 
       const renderAccount = (acct, parent) => {
         const wrap = document.createElement("div");
-        wrap.className = "account-wrap"
-          + (acct.is_active && !state.settings_open ? " active" : "")
-          + (acct.lifecycle === "hibernated" ? " hibernated" : "");
         wrap.draggable = true;
 
         wrap.addEventListener("dragstart", (e) => {
@@ -383,30 +454,9 @@
 
         const btn = document.createElement("button");
         btn.className = "account-btn";
-        btn.style.backgroundColor = acct.color || "#135D43";
-        const flags = [];
-        if (acct.keep_connected) flags.push("Pinned");
-        if (acct.locked) flags.push("Locked");
-        if (acct.needs_login) flags.push("Needs login");
-        if (acct.offline) flags.push("Offline");
-        if (acct.reconnecting) flags.push("Reconnecting");
-        if (acct.muted) flags.push("Muted");
-        if (acct.stale_unread && acct.unread > 0) flags.push("Cached unread");
-        btn.title = `${acct.name} (${acct.lifecycle})${flags.length ? " · " + flags.join(", ") : ""}`;
-
-        if (acct.avatar_url) {
-          const img = document.createElement("img");
-          img.src = acct.avatar_url;
-          img.alt = acct.name;
-          btn.appendChild(img);
-        } else {
-          btn.innerHTML = avatarFallbackSvg();
-        }
-
         btn.addEventListener("click", () => {
           post({ type: "switch_account", id: acct.id });
         });
-
         btn.addEventListener("contextmenu", (e) => {
           e.preventDefault();
           post({
@@ -416,41 +466,26 @@
             y: e.clientY,
           });
         });
-
         wrap.appendChild(btn);
 
-        if (acct.keep_connected) {
-          const pin = document.createElement("span");
-          pin.className = "pin-dot";
-          wrap.appendChild(pin);
-        }
+        const pin = document.createElement("span");
+        pin.className = "pin-dot";
+        wrap.appendChild(pin);
 
-        if (acct.locked) {
-          const lock = document.createElement("span");
-          lock.className = "lock-tag";
-          lock.textContent = "🔒";
-          wrap.appendChild(lock);
-        }
+        const lock = document.createElement("span");
+        lock.className = "lock-tag";
+        lock.textContent = "🔒";
+        wrap.appendChild(lock);
 
-        if (acct.unread > 0) {
-          const badge = document.createElement("span");
-          badge.className = "badge" + (acct.stale_unread ? " stale" : "");
-          badge.textContent = acct.unread > 99 ? "99+" : String(acct.unread);
-          wrap.appendChild(badge);
-        }
+        const badge = document.createElement("span");
+        wrap.appendChild(badge);
 
-        if (acct.needs_login || acct.offline || acct.reconnecting) {
-          const dot = document.createElement("span");
-          dot.className = "state-dot " + (
-            acct.needs_login
-              ? "state-login"
-              : acct.offline
-              ? "state-offline"
-              : "state-reconnecting"
-          );
-          wrap.appendChild(dot);
-        }
+        const dot = document.createElement("span");
+        wrap.appendChild(dot);
 
+        const refs = { wrap, btn, pin, lock, badge, dot, avatarUrl: null };
+        acctNodes.set(acct.id, refs);
+        updateAccountNode(refs, acct, state);
         parent.appendChild(wrap);
       };
 

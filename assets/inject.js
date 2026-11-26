@@ -202,7 +202,20 @@
     }
   };
 
-  setInterval(checkStatus, 3000);
+  let statusTimer = null;
+  const scheduleStatusCheck = () => {
+    if (statusTimer) clearTimeout(statusTimer);
+    const delay = document.hidden ? 15000 : 3000;
+    statusTimer = setTimeout(() => {
+      checkStatus();
+      scheduleStatusCheck();
+    }, delay);
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) checkStatus();
+    scheduleStatusCheck();
+  });
+  scheduleStatusCheck();
   if (document.readyState === "complete") {
     checkStatus();
   } else {

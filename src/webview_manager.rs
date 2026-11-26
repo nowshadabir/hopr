@@ -1,9 +1,12 @@
 use crate::config::{AccountConfig, AppConfig};
-use crate::platform::{downloads_dir, is_low_power_mode, open_external_url};
+#[cfg(target_os = "macos")]
+use crate::platform::downloads_dir;
+use crate::platform::{is_low_power_mode, open_external_url};
 #[cfg(target_os = "macos")]
 use objc2::rc::Weak;
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
+#[cfg(target_os = "macos")]
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -14,9 +17,12 @@ use uuid::Uuid;
 #[cfg(target_os = "macos")]
 use wry::{Rect, WebView, WebViewBuilder, WebViewBuilderExtDarwin, WebViewExtMacOS};
 #[cfg(not(target_os = "macos"))]
-use wry::{Rect, WebContext, WebView, WebViewBuilder};
+use wry::{Rect, WebView};
+
+#[cfg(target_os = "macos")]
+type AccountWebView = WebView;
 #[cfg(target_os = "windows")]
-use wry::WebViewBuilderExtWindows;
+type AccountWebView = crate::win_profile_webview::WinProfileWebView;
 
 const WHATSAPP_URL: &str = "https://web.whatsapp.com";
 const SAFARI_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
@@ -78,9 +84,7 @@ impl RateLimiter {
 }
 
 pub struct AccountRuntime {
-    pub webview: Option<WebView>,
-    #[cfg(not(target_os = "macos"))]
-    pub web_context: Option<WebContext>,
+    pub webview: Option<AccountWebView>,
     pub lifecycle: LifecycleState,
     pub unread: u32,
     pub connection_state: String,
@@ -102,8 +106,6 @@ impl Default for AccountRuntime {
         let now = Instant::now();
         Self {
             webview: None,
-            #[cfg(not(target_os = "macos"))]
-            web_context: None,
             lifecycle: LifecycleState::Hibernated,
             unread: 0,
             connection_state: "hibernated".to_string(),
@@ -279,7 +281,7 @@ impl WebViewManager {
                     && let Some(wv) = &rt.webview
                 {
                     let prev = rt.lifecycle;
-                    let _ = wv.set_bounds(bounds);
+                    let _ = set_account_bounds(wv, bounds, window.scale_factor());
                     let _ = wv.set_visible(visible);
                     if visible {
                         let _ = wv.focus();
@@ -389,7 +391,7 @@ impl WebViewManager {
         self.ensure_webview(acct, window, proxy, bounds, visible)?;
         let rt = self.runtimes.entry(target_id).or_default();
         if let Some(wv) = &rt.webview {
-            let _ = wv.set_bounds(bounds);
+            let _ = set_account_bounds(wv, bounds, window.scale_factor());
             let _ = wv.set_visible(visible);
             if visible {
                 let _ = wv.focus();
@@ -480,28 +482,8 @@ impl WebViewManager {
         };
 
         #[cfg(target_os = "macos")]
-        let builder = WebViewBuilder::new().with_data_store_identifier(acct.uuid_bytes());
-        #[cfg(not(target_os = "macos"))]
-        let builder = {
-            let profile_dir = AppConfig::app_support_dir()
-                .join("profiles")
-                .join(acct.id.to_string());
-            let _ = AppConfig::ensure_secure_dir(&profile_dir);
-            let ctx = rt
-                .web_context
-                .get_or_insert_with(|| WebContext::new(Some(profile_dir)));
-            let b = WebViewBuilder::new_with_web_context(ctx);
-            #[cfg(target_os = "windows")]
-            let b = b.with_additional_browser_args(
-                "--disable-features=msEdgeTranslate,msEdgeShopping,msEdgeSidebarV2,OptimizationHints,msEdgeMiniMenu \
-                 --disable-background-networking --disable-default-apps --disable-extensions \
-                 --disable-sync --metrics-recording-only --no-first-run \
-                 --js-flags=--max-old-space-size=192",
-            );
-            b
-        };
-
-        let webview = builder
+        let webview = WebViewBuilder::new()
+            .with_data_store_identifier(acct.uuid_bytes())
             .with_url(&target_url)
             .with_user_agent(SAFARI_UA)
             .with_devtools(cfg!(debug_assertions))
@@ -537,6 +519,23 @@ impl WebViewManager {
             .build_as_child(window)
             .map_err(|e| e.to_string())?;
 
+        #[cfg(target_os = "windows")]
+        let webview = {
+            let _ = (&ipc_proxy, &dl_counter_end);
+            crate::win_profile_webview::WinProfileWebView::create(
+                account_id,
+                &acct.id.to_string(),
+                &target_url,
+                SAFARI_UA,
+                INJECT_JS,
+                bounds,
+                visible,
+                window,
+                proxy,
+                dl_counter_start,
+            )?
+        };
+
         rt.webview = Some(webview);
         rt.lifecycle = if visible {
             LifecycleState::Active
@@ -559,11 +558,7 @@ impl WebViewManager {
                 .duration_since(rt.last_user_interaction)
                 .as_secs();
             if let Some(wv) = rt.webview.take() {
-                teardown_webview(wv, &format!("acct-{id}"));
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                rt.web_context = None;
+                teardown_account_webview(wv, &format!("acct-{id}"));
             }
             rt.lifecycle = LifecycleState::Hibernated;
             rt.connection_state = "hibernated".to_string();
@@ -578,7 +573,7 @@ impl WebViewManager {
         if let Some(mut rt) = self.runtimes.remove(&id)
             && let Some(wv) = rt.webview.take()
         {
-            teardown_webview(wv, &format!("remove-{id}"));
+            teardown_account_webview(wv, &format!("remove-{id}"));
         }
         self.pending_loads.retain(|x| *x != id);
         if self.active_id == Some(id) {
@@ -602,11 +597,7 @@ impl WebViewManager {
         self.pending_loads.clear();
         for (id, rt) in self.runtimes.iter_mut() {
             if let Some(wv) = rt.webview.take() {
-                teardown_webview(wv, &format!("shutdown-{id}"));
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                rt.web_context = None;
+                teardown_account_webview(wv, &format!("shutdown-{id}"));
             }
             rt.lifecycle = LifecycleState::Hibernated;
         }
@@ -663,7 +654,7 @@ impl WebViewManager {
                     if let Some(until) = rt.waking_until {
                         if now >= until {
                             if let Some(wv) = rt.webview.take() {
-                                teardown_webview(wv, &format!("wake-end-{}", acct.id));
+                                teardown_account_webview(wv, &format!("wake-end-{}", acct.id));
                             }
                             rt.lifecycle = LifecycleState::Hibernated;
                             rt.connection_state = "hibernated".to_string();
@@ -683,7 +674,7 @@ impl WebViewManager {
                     {
                         let idle_secs = now.duration_since(rt.last_user_interaction).as_secs();
                         if let Some(wv) = rt.webview.take() {
-                            teardown_webview(wv, &format!("auto-idle-{}", acct.id));
+                            teardown_account_webview(wv, &format!("auto-idle-{}", acct.id));
                         }
                         rt.lifecycle = LifecycleState::Hibernated;
                         rt.connection_state = "hibernated".to_string();
@@ -735,10 +726,10 @@ impl WebViewManager {
         changed
     }
 
-    pub fn resize_all(&self, bounds: Rect) {
+    pub fn resize_all(&self, bounds: Rect, scale_factor: f64) {
         for rt in self.runtimes.values() {
             if let Some(wv) = &rt.webview {
-                let _ = wv.set_bounds(bounds);
+                let _ = set_account_bounds(wv, bounds, scale_factor);
             }
         }
     }
@@ -813,6 +804,31 @@ fn debug_hibernate_duration(cfg: &AppConfig) -> Option<Duration> {
         Some(Duration::from_secs(cfg.hibernate_after_mins * 60))
     } else {
         None
+    }
+}
+
+fn set_account_bounds(wv: &AccountWebView, bounds: Rect, scale_factor: f64) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = scale_factor;
+        let _ = wv.set_bounds(bounds);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        wv.set_bounds(bounds, scale_factor);
+    }
+}
+
+fn teardown_account_webview(wv: AccountWebView, label: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        teardown_webview(wv, label);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        wv.load_url("about:blank");
+        drop(wv);
+        eprintln!("[teardown] label={label}");
     }
 }
 

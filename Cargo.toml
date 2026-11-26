@@ -1,6 +1,6 @@
 [package]
 name = "hopr"
-version = "1.4.7"
+version = "1.4.8"
 edition = "2024"
 
 [dependencies]
@@ -31,6 +31,13 @@ objc2-local-authentication = { version = "0.3", features = ["LAContext", "LAPubl
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winrt-notification = "0.5"
+webview2-com = "0.38"
+windows-core = "0.61"
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_UI_WindowsAndMessaging",
+] }
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_Security",
